@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM arm64v8/ubuntu:16.04
 
 # Let's try to limit the number of layers to minimum:
 ENV OPENRESTY_VERSION=1.13.6.1 \
