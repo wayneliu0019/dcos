@@ -17,7 +17,7 @@ pushd build
 # TODO(cmaloney): DESTDIR builds so we don't have to build as root?
 # TODO(nfnt): --with-grpc=/usr
 LDFLAGS="-Wl,-rpath,/opt/mesosphere/lib" "/pkg/src/mesos/configure" \
-  --prefix="$PKG_PATH" --enable-optimize --disable-java  --disable-python \
+  --prefix="$PKG_PATH" --enable-optimize  --disable-python \
   --enable-libevent --enable-ssl \
   --enable-launcher-sealing \
   --enable-install-module-dependencies \
