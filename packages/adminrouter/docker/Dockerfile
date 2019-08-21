@@ -15,7 +15,7 @@ ENV OPENRESTY_VERSION=1.15.8.1 \
     IAM_SHARED_SECRET_FILE_PATH=/usr/local/iam.jwt-key.shared-secret
 
 # These depend on other ENV vars, so we need a separate ENV block:
-ENV OPENRESTY_DOWNLOAD_URL=https://openresty.org/download/openresty-$OPENRESTY_VERSION.tar.gz \
+ENV OPENRESTY_DOWNLOAD_URL=http://openresty.org/download/openresty-$OPENRESTY_VERSION.tar.gz \
     AUTH_ERROR_PAGE_DIR_PATH=${AR_BIN_DIR}/nginx/conf/errorpages
 
 WORKDIR /usr/local/src/
@@ -95,7 +95,7 @@ RUN curl -fsSL "$VEGETA_DOWNLOAD_URL" -o vegeta.tar.gz \
 # Prepare Openresty. Compilation is done in Makefile itself so that
 # this container can be reused during DC/OS build.
 RUN set -ex \
-    && curl -fsSL "$OPENRESTY_DOWNLOAD_URL" -o openresty.tar.gz \
+    && curl  "$OPENRESTY_DOWNLOAD_URL" -o openresty.tar.gz \
     && echo "$OPENRESTY_DOWNLOAD_SHASUM  openresty.tar.gz" | shasum -c - \
     && mkdir -pv $OPENRESTY_DIR \
     && tar --strip-components=1 -C $OPENRESTY_DIR -xzf openresty.tar.gz \
