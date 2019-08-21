@@ -1100,7 +1100,7 @@ def _build(package_store, name, variant, clean_after_build, recursive):
         cmd.volumes = {
             package_store.get_package_cache_folder(name): "/pkg/:rw",
         }
-        cmd.container = "ubuntu:14.04.4"
+        cmd.container = "arm64v8/ubuntu:14.04.5"
         cmd.run("package-cleaner", ["rm", "-rf", "/pkg/src", "/pkg/result"])
 
     clean()
