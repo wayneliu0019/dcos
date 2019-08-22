@@ -43,13 +43,13 @@ popd
 
 # TODO(cmaloney): Make these a seperate mesos library package.
 # Copy the shared libraries from the system which mesos requires
-cp /usr/lib/x86_64-linux-gnu/libsasl2.so.2 "$libdir"
-cp -r /usr/lib/x86_64-linux-gnu/sasl2 "$libdir"
-cp /usr/lib/x86_64-linux-gnu/libsvn_delta-1.so.1 "$libdir"
-cp /usr/lib/x86_64-linux-gnu/libsvn_subr-1.so.1 "$libdir"
-cp /usr/lib/x86_64-linux-gnu/libapr-1.so.0 "$libdir"
-cp /usr/lib/x86_64-linux-gnu/libaprutil-1.so.0 "$libdir"
-cp /usr/lib/x86_64-linux-gnu/libdb-5.3.so "$libdir"
+cp /usr/lib/aarch64-linux-gnu/libsasl2.so.2 "$libdir"
+cp -r /usr/lib/aarch64-linux-gnu/sasl2 "$libdir"
+cp /usr/lib/aarch64-linux-gnu/libsvn_delta-1.so.1 "$libdir"
+cp /usr/lib/aarch64-linux-gnu/libsvn_subr-1.so.1 "$libdir"
+cp /usr/lib/aarch64-linux-gnu/libapr-1.so.0 "$libdir"
+cp /usr/lib/aarch64-linux-gnu/libaprutil-1.so.0 "$libdir"
+cp /usr/lib/aarch64-linux-gnu/libdb-5.3.so "$libdir"
 
 export PKG_PATH=$PKG_PATH
 systemd_master="$PKG_PATH"/dcos.target.wants_master/dcos-mesos-master.service

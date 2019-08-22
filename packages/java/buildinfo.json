@@ -2,8 +2,8 @@
   "sources" : {
     "java": {
       "kind": "url_extract",
-      "url": "https://downloads.mesosphere.io/java/jdk-8u192-linux-x64.tar.gz",
-      "sha1": "9e482a7ded535f14916f91510b78904eace28e49"
+      "url": "https://wayne-apac.s3-us-west-2.amazonaws.com/arm64/jdk-8u144-linux-arm64-vfp-hflt.tar.gz",
+      "sha1": "9b587b4ac302ed859bf5b4b87576ce3edc1884ea"
     }
   },
   "environment": {
