@@ -2,14 +2,17 @@ import copy
 import json
 import logging
 import os
+import textwrap
 import uuid
 
+from typing import Any, Generator
+
 import pytest
-
 import retrying
-
 import test_helpers
+
 from dcos_test_utils import marathon, recordio
+from dcos_test_utils.dcos_api import DcosApiSession
 
 __maintainer__ = 'Gilbert88'
 __contact__ = 'core-team@mesosphere.io'
@@ -17,7 +20,7 @@ __contact__ = 'core-team@mesosphere.io'
 
 # Creates and yields the initial ATTACH_CONTAINER_INPUT message, then a data message,
 # then an empty data chunk to indicate end-of-stream.
-def input_streamer(nested_container_id):
+def input_streamer(nested_container_id: dict) -> Generator:
     encoder = recordio.Encoder(lambda s: bytes(json.dumps(s, ensure_ascii=False), "UTF-8"))
     message = {
         'type': 'ATTACH_CONTAINER_INPUT',
@@ -35,11 +38,11 @@ def input_streamer(nested_container_id):
 
     # Place an empty string to indicate EOF to the server and push
     # 'None' to our queue to indicate that we are done processing input.
-    message['attach_container_input']['process_io']['data']['data'] = ''
+    message['attach_container_input']['process_io']['data']['data'] = ''  # type: ignore
     yield encoder.encode(message)
 
 
-def test_if_marathon_app_can_be_debugged(dcos_api_session):
+def test_if_marathon_app_can_be_debugged(dcos_api_session: DcosApiSession) -> None:
     # Launch a basic marathon app (no image), so we can debug into it!
     # Cannot use deploy_and_cleanup because we must attach to a running app/task/container.
     app, test_uuid = test_helpers.marathon_test_app()
@@ -70,7 +73,7 @@ def test_if_marathon_app_can_be_debugged(dcos_api_session):
         assert agent_hostname is not None, 'Agent hostname not found for agent_id {}'.format(agent_id)
         logging.debug('Located %s with containerID %s on agent %s', app_id, container_id, agent_hostname)
 
-        def _post_agent(url, headers, json=None, data=None, stream=False):
+        def _post_agent(url: str, headers: Any, json: Any = None, data: Any = None, stream: bool = False) -> Any:
             r = dcos_api_session.post(
                 url,
                 host=agent_hostname,
@@ -137,7 +140,7 @@ def test_if_marathon_app_can_be_debugged(dcos_api_session):
         assert meowed, 'Read output stream without seeing meow.'
 
 
-def test_files_api(dcos_api_session):
+def test_files_api(dcos_api_session: DcosApiSession) -> None:
     '''
     This test verifies that the standard output and error of a Mesos task can be
     read. We check that neither standard output nor error are empty files. Since
@@ -158,7 +161,7 @@ def test_files_api(dcos_api_session):
             assert content, 'File {} should not be empty'.format(required_sandbox_file)
 
 
-def test_if_ucr_app_runs_in_new_pid_namespace(dcos_api_session):
+def test_if_ucr_app_runs_in_new_pid_namespace(dcos_api_session: DcosApiSession) -> None:
     # We run a marathon app instead of a metronome job because metronome
     # doesn't support running docker images with the UCR. We need this
     # functionality in order to test that the pid namespace isolator
@@ -176,14 +179,14 @@ def test_if_ucr_app_runs_in_new_pid_namespace(dcos_api_session):
         # its output to the `pd_output_file`. Because of this, we wait up to 10
         # seconds for this file to appear before throwing an exception.
         @retrying.retry(wait_fixed=1000, stop_max_delay=10000)
-        def get_ps_output():
+        def get_ps_output() -> Any:
             return dcos_api_session.mesos_sandbox_file(
                 app_task['slaveId'], marathon_framework_id, app_task['id'], ps_output_file)
 
         assert len(get_ps_output().split()) <= 4, 'UCR app has more than 4 processes running in its pid namespace'
 
 
-def test_memory_profiling(dcos_api_session):
+def test_memory_profiling(dcos_api_session: DcosApiSession) -> None:
     # Test that we can fetch raw memory profiles
     master_ip = dcos_api_session.masters[0]
     r0 = dcos_api_session.get(
@@ -199,7 +202,7 @@ def test_memory_profiling(dcos_api_session):
     assert r2.status_code == 200, r2.text
 
 
-def test_containerizer_debug_endpoint(dcos_api_session):
+def test_containerizer_debug_endpoint(dcos_api_session: DcosApiSession) -> None:
     # Test that we can poll `/containerizer/debug` endpoint exposed by the agent.
     agent = dcos_api_session.slaves[0]
     r = dcos_api_session.get('/containerizer/debug', host=agent, port=5051)
@@ -207,7 +210,7 @@ def test_containerizer_debug_endpoint(dcos_api_session):
     assert r.json() == {'pending': []}
 
 
-def test_blkio_stats(dcos_api_session):
+def test_blkio_stats(dcos_api_session: DcosApiSession) -> None:
     expanded_config = test_helpers.get_expanded_config()
     if expanded_config['provider'] == 'azure' or expanded_config['platform'] == 'azure':
         pytest.skip('See: https://jira.mesosphere.com/browse/DCOS-49023')
@@ -238,7 +241,7 @@ def test_blkio_stats(dcos_api_session):
         # Wait up to 10 seconds for the marker file to appear which
         # indicates the disk writes via `dd` command are done.
         @retrying.retry(wait_fixed=1000, stop_max_delay=10000)
-        def get_marker_file_content():
+        def get_marker_file_content() -> Any:
             return dcos_api_session.mesos_sandbox_file(
                 app_task['slaveId'], marathon_framework_id, app_task['id'], marker_file)
 
@@ -305,7 +308,7 @@ def test_blkio_stats(dcos_api_session):
                                                       'app_id {} are less than 10240'.format(app_id))
 
 
-def get_region_zone(domain):
+def get_region_zone(domain: dict) -> tuple:
     assert isinstance(domain, dict), 'input must be dict'
 
     assert 'fault_domain' in domain, 'fault_domain is missing. {}'.format(domain)
@@ -323,8 +326,7 @@ def get_region_zone(domain):
     return region, zone
 
 
-@pytest.mark.supportedwindows
-def test_fault_domain(dcos_api_session):
+def test_fault_domain(dcos_api_session: DcosApiSession) -> None:
     expanded_config = test_helpers.get_expanded_config()
     if expanded_config['fault_domain_enabled'] == 'false':
         pytest.skip('fault domain is not set')
@@ -358,7 +360,7 @@ def test_fault_domain(dcos_api_session):
 
 
 @pytest.fixture
-def reserved_disk(dcos_api_session):
+def reserved_disk(dcos_api_session: DcosApiSession) -> Generator:
     """
     Set up an agent with one disk in a role.
 
@@ -368,11 +370,12 @@ def reserved_disk(dcos_api_session):
     """
     # Setup.
 
-    def principal():
+    def principal() -> str:
         is_enterprise = os.getenv('DCOS_ENTERPRISE', 'false').lower() == 'true'
 
         if is_enterprise:
-            return dcos_api_session.auth_user.uid
+            uid = dcos_api_session.auth_user.uid  # type: str
+            return uid
         else:
             return 'reserved_disk_fixture_principal'
 
@@ -465,3 +468,87 @@ def reserved_disk(dcos_api_session):
                 'unreserve_resources': resources}
             r = dcos_api_session.post('/mesos/api/v1', json=request)
             assert r.status_code == 202, r.text
+
+
+def test_executor_uses_domain_socket(dcos_api_session: DcosApiSession) -> None:
+    """
+    This test validates that by default executors connect with the agent over domain sockets.
+
+    The test launches a Marathon app with a health check which validates that
+    the `mesos-executor` process of the task is connected to the agent socket.
+    We do not validate that any actual data is passed over the socket
+    connection. Once the app is healthy the test has succeeded.
+    """
+    expanded_config = test_helpers.get_expanded_config()
+    if expanded_config.get('security') == 'strict':
+        pytest.skip('Cannot detect domain sockets with EE strict mode enabled')
+
+    task_id = 'domain-socket-{}'.format(uuid.uuid4())
+
+    check = textwrap.dedent('''\
+        #!/bin/bash
+
+        set -o nounset -o pipefail
+        set -ex
+
+        export PATH=/usr/sbin/:$PATH
+        MESOS_EXECUTORS_SOCK="/var/run/mesos/mesos-executors.sock"
+
+        # In the container's PID namespace the containerizer will have pid=1. Since the
+        # first process it launches is the executor, the executor has pid=2.
+        EXECUTOR_PID=2
+        grep -q '^mesos-executor' /proc/$EXECUTOR_PID/cmdline || exit 2
+
+        declare -i socket_connections
+        socket_connections=0
+
+        for peer in $(ss -xp | grep "pid=$EXECUTOR_PID" | awk '{print $8}'); do
+            # We cannot see the mesos-agent process, but can make sure
+            # the executor's socket is related to the agent socket.
+            if ss -xp | grep "$peer" | grep -q "$MESOS_EXECUTORS_SOCK"; then
+                ((socket_connections+=1))
+            fi
+        done
+
+        if [ $socket_connections -ne 2 ]; then
+            echo "expected 2 socket connections, got $socket_connections"
+            exit 1
+        fi''')
+
+    app = {
+        "id": task_id,
+        "cpus": 0.1,
+        "mem": 32,
+        "disk": 32,
+        "cmd": "sleep 10000",
+        "container": {
+            "type": "MESOS",
+            "volumes": []
+        },
+        "instances": 1,
+        "healthChecks": [{
+            "gracePeriodSeconds": 5,
+            "intervalSeconds": 60,
+            "maxConsecutiveFailures": 1,
+            "timeoutSeconds": 20,
+            "delaySeconds": 1,
+            "protocol": "COMMAND",
+            "command": {
+                "value": check
+            }
+        }],
+    }
+
+    with dcos_api_session.marathon.deploy_and_cleanup(app,
+                                                      check_health=False,
+                                                      timeout=60):
+        # Retry collecting the health check result since its availability might be delayed.
+        @retrying.retry(wait_fixed=1000, stop_max_delay=10000)
+        def assert_app_is_healthy() -> None:
+            assert dcos_api_session.marathon.check_app_instances(
+                app_id=task_id,
+                app_instances=1,
+                check_health=True,
+                ignore_failed_tasks=False)
+
+        assert_app_is_healthy()

@@ -4,7 +4,6 @@ import json
 import os
 import os.path
 import shutil
-import subprocess
 import tempfile
 
 import checksumdir
@@ -22,10 +21,11 @@ from gen.calc import (
     validate_true_false,
 )
 from gen.internals import Source
+from pkgpanda import subprocess
 from pkgpanda.constants import (
     cloud_config_yaml, dcos_services_yaml, install_root
 )
-from pkgpanda.util import copy_directory, copy_file, is_windows, logger, make_directory
+from pkgpanda.util import copy_directory, copy_file, logger, make_directory
 
 
 def calculate_custom_check_bins_provided(custom_check_bins_dir):
@@ -108,7 +108,7 @@ chmod {mode} {filename}
 
 """
 
-bash_template = """#!/bin/bash
+bash_template = r"""#!/bin/bash
 #
 # BASH script to install DC/OS on a node
 #
@@ -465,52 +465,11 @@ function check_all() {
 
     check_docker_running
 
-    local docker_version=$(command -v docker >/dev/null 2>&1 && docker version 2>/dev/null | awk '
-        BEGIN {
-            version = 0
-            client_version = 0
-            server_version = 0
-        }
-        {
-            if($1 == "Server:") {
-                server = 1
-                client = 0
-            } else if($1 == "Client:") {
-                server = 0
-                client = 1
-            } else if ($1 == "Server" && $2 == "version:") {
-                server_version = $3
-            } else if ($1 == "Client" && $2 == "version:") {
-                client_version = $3
-            }
-            if(server && $1 == "Version:") {
-                server_version = $2
-            } else if(client && $1 == "Version:") {
-                client_version = $2
-            }
-        }
-        END {
-            if(client_version == server_version) {
-                version = client_version
-            } else {
-                cv_length = split(client_version, cv, ".")
-                sv_length = split(server_version, sv, ".")
+    local docker_version=$(command -v docker >/dev/null 2>&1 \
+        && docker version --format '{{{{printf "%s\\n%s" .Server.Version .Client.Version}}' \
+        | sort -V \
+        | head -n 1)
 
-                y = cv_length > sv_length ? cv_length : sv_length
-
-                for(i = 1; i <= y; i++) {
-                    if(cv[i] < sv[i]) {
-                        version = client_version
-                        break
-                    } else if(sv[i] < cv[i]) {
-                        version = server_version
-                        break
-                    }
-                }
-            }
-            print version
-        }
-    ')
     # CoreOS stable as of Aug 2015 has 1.6.2
     check docker 1.6 "$docker_version"
 
@@ -529,31 +488,27 @@ function check_all() {
     # Pick up just the first line of output and get the version from it
     check systemctl 200 $(systemctl --version | head -1 | cut -f2 -d' ') systemd
 
-    echo -e -n "Checking if group 'nogroup' exists: "
-    getent group nogroup > /dev/null
-    RC=$?
-    print_status $RC
-    (( OVERALL_RC += $RC ))
-
     # Run service check on master node only
     if [[ $AGENT_ONLY -eq 0 ]]; then
         # master node service checks
         for service in \
             "53 dcos-net" \
             "80 adminrouter" \
+            "179 dcos-calico-bird" \
+            "2379 dcos-etcd" \
+            "2380 dcos-etcd" \
             "443 adminrouter" \
             "1050 dcos-diagnostics" \
             "2181 zookeeper" \
             "5050 mesos-master" \
             "7070 cosmos" \
             "8080 marathon" \
-            "8101 dcos-oauth" \
+            "8101 dcos-bouncer" \
             "8123 mesos-dns" \
             "8181 exhibitor" \
             "9000 metronome" \
             "9942 metronome" \
             "9990 cosmos" \
-            "15055 dcos-history" \
             "36771 marathon" \
             "41281 zookeeper" \
             "46839 metronome" \
@@ -561,7 +516,9 @@ function check_all() {
             "61091 telegraf" \
             "62020 fluent-bit" \
             "62080 dcos-net" \
-            "62501 dcos-net"
+            "62091 dcos-calico-felix" \
+            "62501 dcos-net" \
+            "64000 dcos-net"
         do
             check_service $service
         done
@@ -569,12 +526,15 @@ function check_all() {
         # agent / public agent node service checks
         for service in \
             "53 dcos-net" \
+            "179 dcos-calico-bird" \
             "5051 mesos-agent" \
             "61001 agent-adminrouter" \
             "61091 telegraf" \
             "62020 fluent-bit" \
             "62080 dcos-net" \
-            "62501 dcos-net"
+            "62091 dcos-calico-felix" \
+            "62501 dcos-net" \
+            "64000 dcos-net"
         do
             check_service $service
         done
@@ -599,6 +559,17 @@ function check_all() {
     return $OVERALL_RC
 }
 
+function setup_exhibitor_tls_bootstrap()
+{
+    read -d '' ca_data << 'EOF' || true
+{{ exhibitor_ca_certificate }}
+EOF
+
+    if [ -n "$ca_data" ]; then
+        echo "$ca_data" > {{ exhibitor_ca_certificate_path }}
+    fi
+}
+
 function dcos_install()
 {
     # Enable errexit
@@ -606,6 +577,7 @@ function dcos_install()
 
     setup_directories
     setup_dcos_roles
+    setup_exhibitor_tls_bootstrap
     configure_dcos
     setup_and_start_services
 
@@ -738,7 +710,10 @@ def make_bash(gen_out) -> None:
         'generation_date': util.template_generation_date,
         'setup_flags': setup_flags,
         'setup_services': setup_services,
-        'mesos_agent_work_dir': gen_out.arguments['mesos_agent_work_dir']})
+        'mesos_agent_work_dir': gen_out.arguments['mesos_agent_work_dir'],
+        'exhibitor_ca_certificate': gen_out.arguments['exhibitor_ca_certificate'],
+        'exhibitor_ca_certificate_path': gen_out.arguments['exhibitor_ca_certificate_path'],
+    })
 
     # Output the dcos install script
     install_script_filename = 'dcos_install.sh'
@@ -814,8 +789,7 @@ def make_installer_docker(variant, variant_info, installer_info):
             'bootstrap_id': bootstrap_id,
             'dcos_image_commit': util.dcos_image_commit})
 
-        if not is_windows:
-            subprocess.check_call(['chmod', '+x', dest_path('installer_internal_wrapper')])
+        subprocess.check_call(['chmod', '+x', dest_path('installer_internal_wrapper')])
 
         # TODO(cmaloney) make this use make_bootstrap_artifacts / that set
         # rather than manually keeping everything in sync

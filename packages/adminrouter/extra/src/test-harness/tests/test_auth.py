@@ -7,7 +7,7 @@ import pytest
 import requests
 
 from generic_test_code.common import assert_endpoint_response
-from util import GuardedSubprocess, SearchCriteria, auth_type_str
+from util import SearchCriteria, auth_type_str
 
 EXHIBITOR_PATH = "/exhibitor/foo/bar"
 
@@ -117,7 +117,7 @@ class TestAuthnJWTValidator:
             "No auth token in request.": SearchCriteria(0, True),
             "Invalid token. Reason: invalid jwt string":
                 SearchCriteria(0, True),
-            "UID from the valid DC/OS authentication token: `test`": SearchCriteria(1, True),
+            "uid=test": SearchCriteria(1, True),
             }
 
         token = jwt_generator(uid='test')
@@ -131,8 +131,7 @@ class TestAuthnJWTValidator:
 
     def test_valid_auth_token(self, master_ar_process_perclass, valid_user_header):
         log_messages = {
-            "UID from the valid DC/OS authentication token: `bozydar`":
-                SearchCriteria(1, True),
+            "uid=bozydar": SearchCriteria(1, True),
             }
         assert_endpoint_response(
             master_ar_process_perclass,
@@ -149,10 +148,8 @@ class TestAuthnJWTValidator:
             jwt_generator,
             ):
         log_messages = {
-            "UID from the valid DC/OS authentication token: `bozydar`":
-                SearchCriteria(1, True),
-            "UID from the valid DC/OS authentication token: `test`":
-                SearchCriteria(0, True),
+            "uid=bozydar": SearchCriteria(1, True),
+            "uid=test": SearchCriteria(0, True),
             }
 
         token = jwt_generator(uid='test')
@@ -171,7 +168,7 @@ class TestAuthnJWTValidator:
             jwt_generator,
             ):
         log_messages = {
-            "Invalid token. Reason: Missing one of claims - \[ uid \]":
+            r"Invalid token. Reason: Missing one of claims - \[ uid \]":
                 SearchCriteria(1, True),
             }
 
@@ -318,16 +315,3 @@ class TestAuthPrecedence:
             headers=valid_user_header)
 
         assert resp.status_code == 503
-
-    def test_if_historyservice_endpoint_auth_precedence_is_enforced(
-            self, valid_user_header, mocker, nginx_class):
-
-        ar = nginx_class(host_ip=None)
-        url = ar.make_url_from_path('/dcos-history-service/foo/bar')
-
-        with GuardedSubprocess(ar):
-            resp = requests.get(url, allow_redirects=False)
-            assert resp.status_code == 401
-
-            resp = requests.get(url, allow_redirects=False, headers=valid_user_header)
-            assert resp.status_code == 503

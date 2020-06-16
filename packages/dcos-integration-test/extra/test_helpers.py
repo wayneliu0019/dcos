@@ -4,6 +4,8 @@ import logging
 import subprocess
 import uuid
 
+from typing import Any, Optional
+
 import retrying
 
 from dcos_test_utils import marathon
@@ -16,7 +18,7 @@ TEST_APP_NAME_FMT = 'integration-test-{}'
 log = logging.getLogger(__name__)
 
 
-def get_exhibitor_admin_password():
+def get_exhibitor_admin_password() -> str:
     try:
         with open('/opt/mesosphere/etc/exhibitor_realm', 'r') as f:
             exhibitor_realm = f.read().strip()
@@ -29,7 +31,7 @@ def get_exhibitor_admin_password():
     return password
 
 
-def get_expanded_config():
+def get_expanded_config() -> Any:
     # make the expanded config available at import time to allow determining
     # which tests should run before the test suite kicks off
     with open('/opt/mesosphere/etc/expanded.config.json', 'r') as f:
@@ -54,15 +56,15 @@ def docker_pull_image(image: str) -> bool:
 
 
 def marathon_test_app_linux(
-        host_port: int=0,
-        container_port: int=None,
-        container_type: marathon.Container=marathon.Container.NONE,
-        network: marathon.Network=marathon.Network.HOST,
-        healthcheck_protocol: marathon.Healthcheck=marathon.Healthcheck.HTTP,
-        vip: str=None,
-        host_constraint: str=None,
-        network_name: str='dcos',
-        app_name_fmt: str=TEST_APP_NAME_FMT):
+        host_port: int = 0,
+        container_port: Optional[int] = None,
+        container_type: marathon.Container = marathon.Container.NONE,
+        network: marathon.Network = marathon.Network.HOST,
+        healthcheck_protocol: marathon.Healthcheck = marathon.Healthcheck.HTTP,
+        vip: Optional[str] = None,
+        host_constraint: Optional[str] = None,
+        network_name: str = 'dcos',
+        app_name_fmt: str = TEST_APP_NAME_FMT) -> tuple:
     """ Creates an app definition for the python test server which will be
     consistent (i.e. deployable with green health checks and desired network
     routability). To learn more about the test server, see in this repo:
@@ -121,13 +123,13 @@ def marathon_test_app_linux(
     })
     if container_port is not None and \
             healthcheck_protocol == marathon.Healthcheck.MESOS_HTTP:
-        app['healthChecks'][0]['port'] = container_port
+        app['healthChecks'][0]['port'] = container_port  # type: ignore
     elif host_port == 0:
         # port is being assigned by marathon so refer to this port by index
-        app['healthChecks'][0]['portIndex'] = 0
+        app['healthChecks'][0]['portIndex'] = 0  # type: ignore
     else:
         # HOST or USER network with non-zero host port
-        app['healthChecks'][0]['port'] = host_port
+        app['healthChecks'][0]['port'] = host_port  # type: ignore
 
     if container_type != marathon.Container.NONE:
         app['container'] = {
@@ -151,18 +153,18 @@ def marathon_test_app_linux(
             'name': 'test'
         }]
         if vip is not None:
-            app['portDefinitions'][0]['labels'] = {'VIP_0': vip}
+            app['portDefinitions'][0]['labels'] = {'VIP_0': vip}  # type: ignore
     else:
-        app['container']['portMappings'] = [{
+        app['container']['portMappings'] = [{  # type: ignore
             'hostPort': host_port,
             'containerPort': container_port,
             'protocol': 'tcp',
             'name': 'test'}]
         if vip is not None:
-            app['container']['portMappings'][0]['labels'] = {'VIP_0': vip}
+            app['container']['portMappings'][0]['labels'] = {'VIP_0': vip}  # type: ignore
         if network == marathon.Network.USER:
             if host_port == 0:
-                del app['container']['portMappings'][0]['hostPort']
+                del app['container']['portMappings'][0]['hostPort']  # type: ignore
             app['networks'] = [{
                 'mode': 'container',
                 'name': network_name
@@ -177,71 +179,66 @@ def marathon_test_app_linux(
     return app, test_uuid
 
 
-def marathon_test_app_windows(
-        host_constraint: str=None,
-        host_port: int=None,
-        network_name: str='dcosnat'):
+def marathon_test_docker_app(app_name: str, constraints: Any = None) -> tuple:
     """ Creates an app definition for the python test server container
 
     Args:
-        host_port: port that marathon will use to route traffic into the
-            test server container.
-        host_constraint: string representing a hostname for an agent that this
-            app should run on
+        app_name: a human readable name to identify the app for debugging.
+        constraints: placement spec
 
     Return:
         (dict, str): 2-Tuple of app definition (dict) and app ID (string)
     """
-    # Container type can be only DOCKER
-    container_type = marathon.Container.DOCKER
-    # This will return an app definition to spawn the microsoft/iis container
-    # which uses port 80
-    container_port = 80
-    if host_port is None:
-        # provide a dummy value if user is indifferent
-        host_port = 31500
-
     test_uuid = uuid.uuid4().hex
     app = copy.deepcopy({
-        'id': TEST_APP_NAME_FMT.format(test_uuid),
-        'cpus': 1,
-        'mem': 512,
+        'id': "integration-test-{}-{}".format(app_name, test_uuid),
+        'cpus': 0.5,
+        'mem': 128,
         'disk': 0,
         'instances': 1,
         'healthChecks': [
             {
-                'protocol': 'MESOS_HTTP',
-                'path': '/',
-                'gracePeriodSeconds': 300,
-                'intervalSeconds': 60,
-                'timeoutSeconds': 20,
-                'maxConsecutiveFailures': 3,
-                'port': container_port,
-                'path': '/',
-                'ignoreHttp1xx': False
+                "gracePeriodSeconds": 90,
+                "ignoreHttp1xx": False,
+                "intervalSeconds": 10,
+                "maxConsecutiveFailures": 3,
+                "portIndex": 0,
+                "timeoutSeconds": 2,
+                "delaySeconds": 15,
+                "protocol": "HTTP",
+                "path": "/",
+                "ipProtocol": "IPv4"
             }
         ],
+        'container': {
+            'type': 'DOCKER',
+            'portMappings': [{
+                'containerPort': 80,
+                'hostPort': 0,
+                'protocol': 'tcp',
+                'name': 'http'
+            }],
+            'docker': {
+                'image': "mcr.microsoft.com/dotnet/core/samples:aspnetapp",
+                'forcePullImage': False,
+                'privileged': False,
+            }
+        },
+        "networks": [
+            {
+                "mode": "container/bridge"
+            }
+        ],
+        'upgradeStrategy': {
+            'maximumOverCapacity': 0,
+            'minimumHealthCapacity': 0
+        },
     })
 
-    app['networks'] = [
-        {'mode': 'container', 'name': network_name}]
-    app['container'] = {
-        'type': container_type.value,
-        'docker': {'image': 'microsoft/iis:windowsservercore-1803'},
-        'volumes': []}
-    app['container']['docker']['forcePullImage'] = False
-    app['container']['docker']['privileged'] = False
-    app['container']['docker']['portMappings'] = [{
-        'containerPort': container_port,
-        'hostPort': host_port}]
-
-    if host_constraint is not None:
-        app['constraints'] = [['hostname', 'CLUSTER', host_constraint]]
     # Add Windows constraint
-    app['constraints'] = app.get('constraints', []) + [['os', 'LIKE', 'Windows']]
-    app['acceptedResourceRoles'] = ["slave_public"]
+    app['constraints'] = app.get('constraints', []) + constraints
 
-    return app, test_uuid
+    return app, app['id']
 
 
 marathon_test_app = marathon_test_app_linux

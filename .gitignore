@@ -1,5 +1,4 @@
 __pycache__
-test_util/dcos-vagrant/
 this
 .idea/
 dcos-config--setup*.tar.xz
@@ -29,3 +28,7 @@ packages/dcos-provider-*
 package_lists
 .vscode
 .python-version
+/dev
+/*.egg-info
+/packages/cache
+/dcos-release.config.yaml

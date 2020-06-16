@@ -34,8 +34,15 @@ check_max_artifact_size() {
   artifact_name=$1
   artifact_size=$(du --summarize --block-size=1M ${artifact_name} | grep -Po "\d+" | head -1)
   if (( $artifact_size > $max_artifact_size )); then
-    sudo rm -rf $artifact_name
     echo "Deleting artifact ${artifact_name}. Size of ${artifact_size}MB is exceeding limit of ${max_artifact_size}MB."
+    echo "Size threshhold can be adjusted via MAX_ARTIFACT_SIZE_MB environment variable"
+    # dump info / contents of tarballs on oversized files to try to be useful
+    # and prevent re-runs if possible
+    if [ $(file --mime-type -b ${artifact_name})=="application/gzip" ]
+        then
+            tar -ztvf ${artifact_name}
+    fi
+    sudo rm -rf $artifact_name
   fi
 }
 
@@ -166,20 +173,15 @@ else
 fi
 
 # generate diagnostics bundle
-bundle_name=$(./dcos-cli $debug_options node diagnostics create all | grep -o bundle-.*)
-echo "diagnostics bundle name: ${bundle_name}"
+bundle_id=$(./dcos-cli $debug_options diagnostics create)
+echo "diagnostics bundle name: ${bundle_id}"
 
 # wait for the diagnostics job to complete
-status_output="$(./dcos-cli $debug_options node diagnostics --status)"
-while [[ $status_output =~ "is_running: True" ]]; do
-    echo "Diagnostics job still running. Retrying in 5 seconds."
-    sleep 5
-    status_output="$(./dcos-cli $debug_options node diagnostics --status)"
-done
+./dcos-cli $debug_options diagnostics wait
 
 # get diagnostics bundle
-./dcos-cli $debug_options node diagnostics download $bundle_name
-check_max_artifact_size "$bundle_name"
+./dcos-cli $debug_options diagnostics download
+check_max_artifact_size "$bundle_id".zip
 
 # copy the identity file to the master node so we don't need the ssh-agent when agent forwarding
 if [[ ! -z $identity_file ]]; then
@@ -187,6 +189,12 @@ if [[ ! -z $identity_file ]]; then
 fi
 
 nodes_info_json=$(./dcos-cli $debug_options node --json)
+# For newer DC/OS versions, the CLI can call "dcos node log --all" to get the complete logs.
+# However, that's not possible for older DC/OS versions.
+# Since we want this script to work for all versions, here we are using an arbitrary high number.
+# 250000000 lines averaging 200 characters would amounts to about 50GB.
+max_lines=250000000
+
 for node_info in $(echo "$nodes_info_json" | jq -r '.[] | @base64'); do
   _jq() {
    echo "$node_info" | base64 --decode | jq -r ${1}
@@ -204,7 +212,7 @@ for node_info in $(echo "$nodes_info_json" | jq -r '.[] | @base64'); do
     check_max_artifact_size "master_journald.log"
 
     # get mesos logs
-    ./dcos-cli $debug_options node log --leader > mesos_master.log
+    ./dcos-cli $debug_options node log --leader --lines $max_lines > mesos_master.log
     check_max_artifact_size "mesos_master.log"
   else
     mesos_sandbox_size=$(ssh $ssh_options $master_public_ip -- ssh $ssh_options $ip -- sudo du --summarize --block-size=1M /var/lib/mesos/slave/ | grep -Po "\d+")
@@ -228,7 +236,7 @@ for node_info in $(echo "$nodes_info_json" | jq -r '.[] | @base64'); do
     check_max_artifact_size "agent_${ip_underscores}_journald.log"
 
     # get mesos logs
-    ./dcos-cli $debug_options node log --mesos-id=$id > mesos_agent_${ip_underscores}.log
+    ./dcos-cli $debug_options node log --mesos-id=$id --lines $max_lines > mesos_agent_${ip_underscores}.log
     check_max_artifact_size "mesos_agent_${ip_underscores}.log"
   fi
 done

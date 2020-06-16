@@ -10,16 +10,17 @@ import kazoo.client
 import pytest
 import requests
 
+from dcos_test_utils.dcos_api import DcosApiSession
 from test_helpers import get_expanded_config
+
 
 __maintainer__ = 'mnaboka'
 __contact__ = 'dcos-cluster-ops@mesosphere.io'
 
 
 @pytest.mark.first
-@pytest.mark.supportedwindows
-def test_dcos_cluster_is_up(dcos_api_session):
-    def _docker_info(component):
+def test_dcos_cluster_is_up() -> None:
+    def _docker_info(component: str) -> str:
         # sudo is required for non-coreOS installs
         return (subprocess.check_output(['sudo', 'docker', 'version', '-f', component], timeout=60)
                 .decode('utf-8')
@@ -47,8 +48,7 @@ def test_dcos_cluster_is_up(dcos_api_session):
     logging.info(json.dumps(cluster_environment, sort_keys=True, indent=4))
 
 
-@pytest.mark.supportedwindows
-def test_leader_election(dcos_api_session):
+def test_leader_election(dcos_api_session: DcosApiSession) -> None:
     mesos_resolver = dns.resolver.Resolver()
     mesos_resolver.nameservers = dcos_api_session.masters
     mesos_resolver.port = 61053
@@ -58,8 +58,7 @@ def test_leader_election(dcos_api_session):
         assert False, "Cannot resolve leader.mesos"
 
 
-@pytest.mark.supportedwindows
-def test_if_all_mesos_masters_have_registered(dcos_api_session):
+def test_if_all_mesos_masters_have_registered(dcos_api_session: DcosApiSession) -> None:
     # Currently it is not possible to extract this information through Mesos'es
     # API, let's query zookeeper directly.
     zk_hostports = 'zk-1.zk:2181,zk-2.zk:2181,zk-3.zk:2181,zk-4.zk:2181,zk-5.zk:2181'
@@ -77,8 +76,7 @@ def test_if_all_mesos_masters_have_registered(dcos_api_session):
     assert sorted(master_ips) == dcos_api_session.masters
 
 
-@pytest.mark.supportedwindows
-def test_if_all_exhibitors_are_in_sync(dcos_api_session):
+def test_if_all_exhibitors_are_in_sync(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/exhibitor/exhibitor/v1/cluster/status')
     assert r.status_code == 200
 
@@ -94,8 +92,8 @@ def test_if_all_exhibitors_are_in_sync(dcos_api_session):
         assert correct_data == tested_data
 
 
-def test_mesos_agent_role_assignment(dcos_api_session):
-    state_endpoint = '/state.json'
+def test_mesos_agent_role_assignment(dcos_api_session: DcosApiSession) -> None:
+    state_endpoint = '/state'
     for agent in dcos_api_session.public_slaves:
         r = dcos_api_session.get(state_endpoint, host=agent, port=5051)
         assert r.json()['flags']['default_role'] == 'slave_public'
@@ -104,7 +102,7 @@ def test_mesos_agent_role_assignment(dcos_api_session):
         assert r.json()['flags']['default_role'] == '*'
 
 
-def test_systemd_units_are_healthy(dcos_api_session) -> None:
+def test_systemd_units_are_healthy(dcos_api_session: DcosApiSession) -> None:
     """
     Test that the system is healthy at the arbitrary point in time
     that this test runs. This test has caught several issues in the past
@@ -130,8 +128,8 @@ def test_systemd_units_are_healthy(dcos_api_session) -> None:
         'dcos-cockroachdb-config-change.service',
         'dcos-cockroachdb-config-change.timer',
         'dcos-cosmos.service',
+        'dcos-etcd.service',
         'dcos-exhibitor.service',
-        'dcos-history.service',
         'dcos-log-master.service',
         'dcos-log-master.socket',
         'dcos-logrotate-master.service',
@@ -141,12 +139,18 @@ def test_systemd_units_are_healthy(dcos_api_session) -> None:
         'dcos-mesos-master.service',
         'dcos-metronome.service',
         'dcos-signal.service',
+        'dcos-signal.timer',
         'dcos-bouncer.service',
         'dcos-bouncer-migrate-users.service',
         'dcos-ui-update-service.service',
         'dcos-ui-update-service.socket',
+        'dcos-diagnostics-mesos-state.service',
+        'dcos-diagnostics-mesos-state.timer',
     ]
     all_node_units = [
+        'dcos-calico-bird.service',
+        'dcos-calico-felix.service',
+        'dcos-calico-confd.service',
         'dcos-checks-api.service',
         'dcos-checks-api.socket',
         'dcos-diagnostics.service',
@@ -156,20 +160,22 @@ def test_systemd_units_are_healthy(dcos_api_session) -> None:
         'dcos-net.service',
         'dcos-net-watchdog.service',
         'dcos-pkgpanda-api.service',
-        'dcos-signal.timer',
         'dcos-checks-poststart.service',
         'dcos-checks-poststart.timer',
         'dcos-telegraf.service',
         'dcos-telegraf.socket',
         'dcos-fluent-bit.service']
     slave_units = [
-        'dcos-mesos-slave.service']
+        'dcos-mesos-slave.service',
+        'dcos-mesos-slave.socket']
     public_slave_units = [
-        'dcos-mesos-slave-public.service']
+        'dcos-mesos-slave-public.service',
+        'dcos-mesos-slave-public.socket']
     all_slave_units = [
+        'dcos-adminrouter-agent.service',
+        'dcos-calico-libnetwork-plugin.service',
         'dcos-docker-gc.service',
         'dcos-docker-gc.timer',
-        'dcos-adminrouter-agent.service',
         'dcos-log-agent.service',
         'dcos-log-agent.socket',
         'dcos-logrotate-agent.service',
@@ -232,7 +238,7 @@ def test_systemd_units_are_healthy(dcos_api_session) -> None:
     assert unhealthy_nodes == 0
 
 
-def test_signal_service(dcos_api_session):
+def test_signal_service(dcos_api_session: DcosApiSession) -> None:
     """
     signal-service runs on an hourly timer, this test runs it as a one-off
     and pushes the results to the test_server app for easy retrieval
@@ -318,9 +324,9 @@ def test_signal_service(dcos_api_session):
     }
 
     # Insert the generic property data which is the same between all signal tracks
-    exp_data['diagnostics']['properties'].update(generic_properties)
-    exp_data['cosmos']['properties'].update(generic_properties)
-    exp_data['mesos']['properties'].update(generic_properties)
+    exp_data['diagnostics']['properties'].update(generic_properties)  # type: ignore
+    exp_data['cosmos']['properties'].update(generic_properties)  # type: ignore
+    exp_data['mesos']['properties'].update(generic_properties)  # type: ignore
 
     # Check the entire hash of diagnostics data
     if r_data['diagnostics'] != exp_data['diagnostics']:

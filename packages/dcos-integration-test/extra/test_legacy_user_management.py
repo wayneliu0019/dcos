@@ -21,9 +21,12 @@ user2) which was added by the first user (user1) can add another user (user3).
 import logging
 import uuid
 
-import pytest
-from dcos_test_utils import dcos_cli
+from typing import Generator
 
+import pytest
+
+from dcos_test_utils.dcos_api import DcosApiSession
+from dcos_test_utils.dcos_cli import DcosCli
 from test_helpers import get_expanded_config
 
 
@@ -36,7 +39,7 @@ log = logging.getLogger(__name__)
 
 # Skip entire module in downstream integration tests.
 @pytest.fixture(autouse=True)
-def skip_in_downstream():
+def skip_in_downstream() -> None:
     expanded_config = get_expanded_config()
     if 'security' in expanded_config:
         pytest.skip(
@@ -45,21 +48,21 @@ def skip_in_downstream():
         )
 
 
-def get_users(apisession):
-    r = apisession.get('/acs/api/v1/users')
+def get_users(dcos_api_session: DcosApiSession) -> dict:
+    r = dcos_api_session.get('/acs/api/v1/users')
     r.raise_for_status()
     users = {u['uid']: u for u in r.json()['array']}
     return users
 
 
-def delete_user(apisession, uid):
-    r = apisession.delete('/acs/api/v1/users/%s' % (uid, ))
+def delete_user(dcos_api_session: DcosApiSession, uid: str) -> None:
+    r = dcos_api_session.delete('/acs/api/v1/users/%s' % (uid, ))
     r.raise_for_status()
     assert r.status_code == 204
 
 
 @pytest.fixture()
-def remove_users_added_by_test(dcos_api_session):
+def remove_users_added_by_test(dcos_api_session: DcosApiSession) -> Generator:
     users_before = set(get_users(dcos_api_session))
     log.info('remove_users_added_by_test pre test: users are %s', users_before)
     try:
@@ -72,7 +75,7 @@ def remove_users_added_by_test(dcos_api_session):
             delete_user(dcos_api_session, uid)
 
 
-def test_users_get(dcos_api_session):
+def test_users_get(dcos_api_session: DcosApiSession) -> None:
     users = get_users(dcos_api_session)
     assert users
 
@@ -82,7 +85,7 @@ def test_users_get(dcos_api_session):
             assert k in userdict
 
 
-def test_user_put_no_email_uid_empty_body(dcos_api_session):
+def test_user_put_no_email_uid_empty_body(dcos_api_session: DcosApiSession) -> None:
     # This test mainly demonstrates a subtle API difference between dcos-oauth
     # (legacy) and Bouncer.
     r = dcos_api_session.put('/acs/api/v1/users/user1')
@@ -98,7 +101,7 @@ def test_user_put_no_email_uid_empty_body(dcos_api_session):
 
 
 @pytest.mark.usefixtures('remove_users_added_by_test')
-def test_legacy_user_creation_with_empty_json_doc(dcos_api_session):
+def test_legacy_user_creation_with_empty_json_doc(dcos_api_session: DcosApiSession) -> None:
     # Legacy HTTP clients built for dcos-oauth such as the web UI (up to DC/OS
     # 1.12) might insert users in the following way: uid appears to be an email
     # address, and the JSON document in the request body does not provide a
@@ -125,7 +128,7 @@ def test_legacy_user_creation_with_empty_json_doc(dcos_api_session):
 
 
 @pytest.mark.usefixtures('remove_users_added_by_test')
-def test_user_put_email_uid_and_description(dcos_api_session):
+def test_user_put_email_uid_and_description(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.put(
         '/acs/api/v1/users/user1@domain.foo',
         json={'description': 'integration test user'}
@@ -138,7 +141,7 @@ def test_user_put_email_uid_and_description(dcos_api_session):
 
 
 @pytest.mark.usefixtures('remove_users_added_by_test')
-def test_user_put_with_legacy_body(dcos_api_session):
+def test_user_put_with_legacy_body(dcos_api_session: DcosApiSession) -> None:
     # The UI up to DC/OS 1.12 sends the `creator_uid` and the `cluster_url`
     # properties although they are not used by dcos-oauth. Bouncer supports
     # these two properties for legacy reasons. Note(JP): As a follow-up task we
@@ -153,7 +156,7 @@ def test_user_put_with_legacy_body(dcos_api_session):
 
 
 @pytest.mark.usefixtures('remove_users_added_by_test')
-def test_user_conflict(dcos_api_session):
+def test_user_conflict(dcos_api_session: DcosApiSession) -> None:
     # Note: the empty request body is not the decisive criterion here.
     r = dcos_api_session.put('/acs/api/v1/users/user2@domain.foo', json={})
     assert r.status_code == 201, r.text
@@ -163,7 +166,7 @@ def test_user_conflict(dcos_api_session):
 
 
 @pytest.mark.usefixtures('remove_users_added_by_test')
-def test_user_delete(dcos_api_session):
+def test_user_delete(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.put('/acs/api/v1/users/user6@domain.foo', json={})
     r.raise_for_status()
     assert r.status_code == 201
@@ -176,12 +179,12 @@ def test_user_delete(dcos_api_session):
     assert 'user6@domain.foo' not in users
 
 
-def test_user_put_requires_authentication(noauth_api_session):
+def test_user_put_requires_authentication(noauth_api_session: DcosApiSession) -> None:
     r = noauth_api_session.put('/acs/api/v1/users/user7@domain.foo', json={})
     assert r.status_code == 401, r.text
 
 
-def test_dynamic_ui_config(dcos_api_session):
+def test_dynamic_ui_config(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/dcos-metadata/ui-config.json')
     data = r.json()
     assert not data['clusterConfiguration']['firstUser']
@@ -189,16 +192,15 @@ def test_dynamic_ui_config(dcos_api_session):
     assert 'uiConfiguration' in data
 
 
-def test_dcos_add_user(dcos_api_session):
+def test_dcos_add_user(dcos_api_session: DcosApiSession, new_dcos_cli: DcosCli) -> None:
     """
     dcos_add_user.py script adds a user to IAM using the
     script dcos_add_user.py.
     """
 
     email_address = uuid.uuid4().hex + '@example.com'
-    cli = dcos_cli.DcosCli('', '', '')
     command = ['python', '/opt/mesosphere/bin/dcos_add_user.py', email_address]
-    cli.exec_command(command)
+    new_dcos_cli.exec_command(command)
 
     try:
         r = dcos_api_session.get('/acs/api/v1/users')
@@ -217,23 +219,22 @@ def test_dcos_add_user(dcos_api_session):
         delete_user(dcos_api_session, email_address)
 
 
-def test_check_message_on_adding_user_twice(dcos_api_session):
+def test_check_message_on_adding_user_twice(dcos_api_session: DcosApiSession, new_dcos_cli: DcosCli) -> None:
     """
     Check that the correct message is emitted on adding the
     same user for the second time.
     """
 
     email_address = uuid.uuid4().hex + '@example.com'
-    cli = dcos_cli.DcosCli('', '', '')
     command = ['python', '/opt/mesosphere/bin/dcos_add_user.py', email_address]
-    stdout, stderr = cli.exec_command(command)
+    stdout, stderr = new_dcos_cli.exec_command(command)
 
     try:
         expected_output = '[INFO] Created IAM user `' + email_address + '`\n'
         assert '' == stdout
         assert expected_output == stderr
 
-        stdout, stderr = cli.exec_command(command)
+        stdout, stderr = new_dcos_cli.exec_command(command)
         expected_error = '[INFO] User `' + email_address + '` already exists\n'
         assert expected_error == stderr
         assert '' == stdout

@@ -1,11 +1,14 @@
 import logging
 import uuid
 
+from typing import Any
+
 import pytest
 import requests
 
 import test_helpers
 from dcos_test_utils import marathon
+from dcos_test_utils.dcos_api import DcosApiSession
 
 __maintainer__ = 'kensipe'
 __contact__ = 'orchestration-team@mesosphere.io'
@@ -13,7 +16,7 @@ __contact__ = 'orchestration-team@mesosphere.io'
 log = logging.getLogger(__name__)
 
 
-def deploy_test_app_and_check(dcos_api_session, app: dict, test_uuid: str):
+def deploy_test_app_and_check(dcos_api_session: DcosApiSession, app: dict, test_uuid: str) -> None:
     """This method deploys the test server app and then
     pings its /operating_environment endpoint to retrieve the container
     user running the task.
@@ -58,26 +61,12 @@ def deploy_test_app_and_check(dcos_api_session, app: dict, test_uuid: str):
             assert json_uid != 0, ("App running as {} should not have uid 0.".format(marathon_user))
 
 
-def deploy_test_app_and_check_windows(dcos_api_session, app: dict, test_uuid: str):
-    """This method deploys the python test server container and then checks
-    if the container is up and can accept connections.
-    """
-    # Increase the timeout of the application to avoid failing while pulling the docker image
-    with dcos_api_session.marathon.deploy_and_cleanup(app, timeout=2400, ignore_failed_tasks=True):
-        service_points = dcos_api_session.marathon.get_app_service_endpoints(app['id'])
-        r = requests.get('http://{}:{}'.format(service_points[0].host, service_points[0].port))
-        if r.status_code != 200:
-            msg = "Test server replied with non-200 reply: '{0} {1}. "
-            msg += "Detailed explanation of the problem: {2}"
-            raise Exception(msg.format(r.status_code, r.reason, r.text))
-
-
 @pytest.mark.first
-def test_docker_image_availablity():
+def test_docker_image_availablity() -> None:
     assert test_helpers.docker_pull_image("debian:stretch-slim"), "docker pull failed for image used in the test"
 
 
-def test_if_marathon_app_can_be_deployed(dcos_api_session):
+def test_if_marathon_app_can_be_deployed(dcos_api_session: DcosApiSession) -> None:
     """Marathon app deployment integration test
 
     This test verifies that marathon app can be deployed, and that service points
@@ -94,7 +83,7 @@ def test_if_marathon_app_can_be_deployed(dcos_api_session):
     deploy_test_app_and_check(dcos_api_session, *test_helpers.marathon_test_app())
 
 
-def test_if_docker_app_can_be_deployed(dcos_api_session):
+def test_if_docker_app_can_be_deployed(dcos_api_session: DcosApiSession) -> None:
     """Marathon app inside docker deployment integration test.
 
     Verifies that a marathon app inside of a docker daemon container can be
@@ -108,22 +97,11 @@ def test_if_docker_app_can_be_deployed(dcos_api_session):
             container_port=9080))
 
 
-@pytest.mark.supportedwindows
-@pytest.mark.supportedwindowsonly
-def test_if_docker_app_can_be_deployed_windows(dcos_api_session):
-    """Marathon app inside docker deployment integration test.
-
-    Verifies that a marathon app inside of a docker daemon container can be
-    deployed and accessed as expected on Windows.
-    """
-    deploy_test_app_and_check_windows(dcos_api_session, *test_helpers.marathon_test_app_windows())
-
-
 @pytest.mark.parametrize('healthcheck', [
     marathon.Healthcheck.HTTP,
     marathon.Healthcheck.MESOS_HTTP,
 ])
-def test_if_ucr_app_can_be_deployed(dcos_api_session, healthcheck):
+def test_if_ucr_app_can_be_deployed(dcos_api_session: DcosApiSession, healthcheck: Any) -> None:
     """Marathon app inside ucr deployment integration test.
 
     Verifies that a marathon docker app inside of a ucr container can be
@@ -136,7 +114,7 @@ def test_if_ucr_app_can_be_deployed(dcos_api_session, healthcheck):
             healthcheck_protocol=healthcheck))
 
 
-def test_if_marathon_app_can_be_deployed_with_mesos_containerizer(dcos_api_session):
+def test_if_marathon_app_can_be_deployed_with_mesos_containerizer(dcos_api_session: DcosApiSession) -> None:
     """Marathon app deployment integration test using the Mesos Containerizer
 
     This test verifies that a Marathon app using the Mesos containerizer with
@@ -155,7 +133,7 @@ def test_if_marathon_app_can_be_deployed_with_mesos_containerizer(dcos_api_sessi
         *test_helpers.marathon_test_app(container_type=marathon.Container.MESOS))
 
 
-def test_if_marathon_pods_can_be_deployed_with_mesos_containerizer(dcos_api_session):
+def test_if_marathon_pods_can_be_deployed_with_mesos_containerizer(dcos_api_session: DcosApiSession) -> None:
     """Marathon pods deployment integration test using the Mesos Containerizer
 
     This test verifies that a Marathon pods can be deployed.
@@ -188,85 +166,4 @@ def test_if_marathon_pods_can_be_deployed_with_mesos_containerizer(dcos_api_sess
 
     with dcos_api_session.marathon.deploy_pod_and_cleanup(pod_definition):
         # Trivial app if it deploys, there is nothing else to check
-        pass
-
-
-def test_octarine(dcos_api_session, timeout=30):
-    expanded_config = test_helpers.get_expanded_config()
-    if expanded_config.get('security') == 'strict':
-        pytest.skip('See: https://jira.mesosphere.com/browse/DCOS-14760')
-    # This app binds to port 80. This is only required by the http (not srv)
-    # transparent mode test. In transparent mode, we use ".mydcos.directory"
-    # to go to localhost, the port attached there is only used to
-    # determine which port to send traffic to on localhost. When it
-    # reaches the proxy, the port is not used, and a request is made
-    # to port 80.
-    app, uuid = test_helpers.marathon_test_app(host_port=80)
-    app['acceptedResourceRoles'] = ["slave_public"]
-    app['requirePorts'] = True
-
-    with dcos_api_session.marathon.deploy_and_cleanup(app):
-        service_points = dcos_api_session.marathon.get_app_service_endpoints(app['id'])
-        port_number = service_points[0].port
-        # It didn't actually grab port 80 when requirePorts was unset
-        assert port_number == app['portDefinitions'][0]["port"]
-
-        app_name = app["id"].strip("/")
-        port_name = app['portDefinitions'][0]["name"]
-        port_protocol = app['portDefinitions'][0]["protocol"]
-
-        srv = "_{}._{}._{}.marathon.mesos".format(port_name, app_name, port_protocol)
-        addr = "{}.marathon.mesos".format(app_name)
-        transparent_suffix = ".mydcos.directory"
-
-        standard_mode = "standard"
-        transparent_mode = "transparent"
-
-        t_addr_bind = 2508
-        t_srv_bind = 2509
-
-        standard_addr = "{}:{}/ping".format(addr, port_number)
-        standard_srv = "{}/ping".format(srv)
-        transparent_addr = "{}{}:{}/ping".format(addr, transparent_suffix, t_addr_bind)
-        transparent_srv = "{}{}:{}/ping".format(srv, transparent_suffix, t_srv_bind)
-
-        # The uuids are different between runs so that they don't have a
-        # chance of colliding. They shouldn't anyways, but just to be safe.
-        octarine_runner(dcos_api_session, standard_mode, uuid + "1", standard_addr)
-        octarine_runner(dcos_api_session, standard_mode, uuid + "2", standard_srv)
-        octarine_runner(dcos_api_session, transparent_mode, uuid + "3", transparent_addr, bind_port=t_addr_bind)
-        octarine_runner(dcos_api_session, transparent_mode, uuid + "4", transparent_srv, bind_port=t_srv_bind)
-
-
-def octarine_runner(dcos_api_session, mode, uuid, uri, bind_port=None):
-    log.info("Running octarine(mode={}, uuid={}, uri={}".format(mode, uuid, uri))
-
-    octarine = "/opt/mesosphere/bin/octarine"
-
-    bind_port_str = ""
-    if bind_port is not None:
-        bind_port_str = "-bindPort {}".format(bind_port)
-
-    server_cmd = "{} -mode {} {} {}".format(octarine, mode, bind_port_str, uuid)
-    log.info("Server: {}".format(server_cmd))
-
-    proxy = ('http://127.0.0.1:$({} --client --port {})'.format(octarine, uuid))
-    curl_cmd = '''"$(curl --fail --proxy {} {})"'''.format(proxy, uri)
-    expected_output = '''"$(printf "{\\n    \\"pong\\": true\\n}")"'''
-    check_cmd = """sh -c '[ {} = {} ]'""".format(curl_cmd, expected_output)
-    log.info("Check: {}".format(check_cmd))
-
-    app, uuid = test_helpers.marathon_test_app()
-    app['requirePorts'] = True
-    app['cmd'] = server_cmd
-    app['healthChecks'] = [{
-        "protocol": "COMMAND",
-        "command": {"value": check_cmd},
-        'gracePeriodSeconds': 5,
-        'intervalSeconds': 10,
-        'timeoutSeconds': 10,
-        'maxConsecutiveFailures': 30
-    }]
-
-    with dcos_api_session.marathon.deploy_and_cleanup(app):
         pass

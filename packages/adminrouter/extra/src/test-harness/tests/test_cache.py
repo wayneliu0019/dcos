@@ -24,10 +24,10 @@ class TestCache:
             self, nginx_class, mocker, valid_user_header):
         filter_regexp = {
             'Executing cache refresh triggered by timer': SearchCriteria(1, False),
-            'Cache `[\s\w]+` empty. Fetching.': SearchCriteria(3, True),
-            'Mesos state cache has been successfully updated': SearchCriteria(1, True),
-            'Marathon apps cache has been successfully updated': SearchCriteria(1, True),
-            'marathon leader cache has been successfully updated': SearchCriteria(1, True),
+            r'Cache `[\s\w]+` empty. Fetching.': SearchCriteria(3, True),
+            'Updated Mesos state cache': SearchCriteria(1, True),
+            'Updated Marathon apps cache': SearchCriteria(1, True),
+            'Updated marathon leader cache': SearchCriteria(1, True),
             }
         # Enable recording for marathon
         mocker.send_command(endpoint_id='http://127.0.0.1:8080',
@@ -65,10 +65,10 @@ class TestCache:
             self, nginx_class, mocker, valid_user_header):
         filter_regexp = {
             'Executing cache refresh triggered by timer': SearchCriteria(3, False),
-            'Cache `[\s\w]+` expired. Refresh.': SearchCriteria(8, True),
-            'Mesos state cache has been successfully updated': SearchCriteria(3, True),
-            'Marathon apps cache has been successfully updated': SearchCriteria(3, True),
-            'marathon leader cache has been successfully updated': SearchCriteria(3, True),
+            r'Cache `[\s\w]+` expired. Refresh.': SearchCriteria(8, True),
+            'Updated Mesos state cache': SearchCriteria(3, True),
+            'Updated Marathon apps cache': SearchCriteria(3, True),
+            'Updated marathon leader cache': SearchCriteria(3, True),
             }
         cache_poll_period = 4
 
@@ -112,10 +112,10 @@ class TestCache:
         """...right after Nginx has started."""
         filter_regexp = {
             'Executing cache refresh triggered by request': SearchCriteria(1, True),
-            'Cache `[\s\w]+` empty. Fetching.': SearchCriteria(3, True),
-            'Mesos state cache has been successfully updated': SearchCriteria(1, True),
-            'Marathon apps cache has been successfully updated': SearchCriteria(1, True),
-            'marathon leader cache has been successfully updated': SearchCriteria(1, True),
+            r'Cache `[\s\w]+` empty. Fetching.': SearchCriteria(3, True),
+            'Updated Mesos state cache': SearchCriteria(1, True),
+            'Updated Marathon apps cache': SearchCriteria(1, True),
+            'Updated marathon leader cache': SearchCriteria(1, True),
             }
         # Enable recording for marathon
         mocker.send_command(endpoint_id='http://127.0.0.1:8080',
@@ -156,7 +156,7 @@ class TestCache:
         filter_regexp = {
             'Marathon app request failed: invalid response status: 500':
                 SearchCriteria(1, False),
-            'Mesos state cache has been successfully updated':
+            'Updated Mesos state cache':
                 SearchCriteria(2, False),
             'Cache entry `svcapps` is too old, aborting request':
                 SearchCriteria(1, True),
@@ -207,7 +207,7 @@ class TestCache:
         filter_regexp = {
             'Marathon app request failed: invalid response status: 500':
                 SearchCriteria(1, False),
-            'Mesos state cache has been successfully updated':
+            'Updated Mesos state cache':
                 SearchCriteria(2, False),
             'Cache entry `svcapps` is stale':
                 SearchCriteria(1, True),
@@ -257,7 +257,7 @@ class TestCache:
         filter_regexp = {
             'Mesos state request failed: invalid response status: 500':
                 SearchCriteria(1, False),
-            'Marathon apps cache has been successfully updated':
+            'Updated Marathon apps cache':
                 SearchCriteria(2, False),
             'Cache entry `mesosstate` is too old, aborting request':
                 SearchCriteria(1, True),
@@ -300,7 +300,7 @@ class TestCache:
         filter_regexp = {
             'Mesos state request failed: invalid response status: 500':
                 SearchCriteria(1, False),
-            'Marathon apps cache has been successfully updated':
+            'Updated Marathon apps cache':
                 SearchCriteria(2, False),
             'Cache entry `mesosstate` is stale':
                 SearchCriteria(1, True),
@@ -342,7 +342,7 @@ class TestCache:
         filter_regexp = {
             'Marathon app request failed: invalid response status: 500':
                 SearchCriteria(1, True),
-            'Mesos state cache has been successfully updated':
+            'Updated Mesos state cache':
                 SearchCriteria(1, True),
         }
 
@@ -368,7 +368,7 @@ class TestCache:
         filter_regexp = {
             'Mesos state request failed: invalid response status: 500':
                 SearchCriteria(1, True),
-            'Marathon apps cache has been successfully updated': SearchCriteria(1, True),
+            'Updated Marathon apps cache': SearchCriteria(1, True),
         }
 
         # Break marathon
@@ -683,81 +683,6 @@ class TestCache:
                 time.sleep(backend_request_timeout * 0.3 + 1)  # let it warm-up!
                 ping_mesos_agent(ar, valid_user_header)
 
-    def test_if_temp_dns_borkage_does_not_disrupt_mesosleader_caching(
-            self, nginx_class, dns_server_mock, valid_user_header):
-        filter_regexp_pre = {
-            'marathon leader cache has been successfully updated':
-                SearchCriteria(1, True),
-            'Marathon apps cache has been successfully updated':
-                SearchCriteria(1, True),
-            'Mesos state cache has been successfully updated':
-                SearchCriteria(1, True),
-            'mesos leader cache has been successfully updated':
-                SearchCriteria(1, True),
-        }
-
-        filter_regexp_post = {
-            'marathon leader cache has been successfully updated':
-                SearchCriteria(1, True),
-            'Marathon apps cache has been successfully updated':
-                SearchCriteria(1, True),
-            'Mesos state cache has been successfully updated':
-                SearchCriteria(1, True),
-            # The problem here is that there may occur two updated, one after
-            # another, and failed one will be retried. This stems directly from
-            # how cache.lua works. Let's permit multiple occurences for now.
-            'DNS server returned error code':
-                SearchCriteria(1, False),
-            'Cache entry `mesos_leader` is stale':
-                SearchCriteria(1, True),
-        }
-        cache_max_age_soft_limit = 3
-
-        ar = nginx_class(cache_max_age_soft_limit=cache_max_age_soft_limit,
-                         cache_max_age_hard_limit=1200,
-                         cache_expiration=2,
-                         cache_poll_period=3,
-                         cache_first_poll_delay=1,
-                         )
-
-        url = ar.make_url_from_path('/dcos-history-service/foo/bar')
-
-        with GuardedSubprocess(ar):
-            lbf = LineBufferFilter(filter_regexp_pre,
-                                   timeout=5,  # Just to give LBF enough time
-                                   line_buffer=ar.stderr_line_buffer)
-
-            with lbf:
-                # Trigger cache update by issuing request:
-                resp = requests.get(url,
-                                    allow_redirects=False,
-                                    headers=valid_user_header)
-                assert resp.status_code == 200
-
-            assert lbf.extra_matches == {}
-
-            lbf = LineBufferFilter(filter_regexp_post,
-                                   timeout=5,  # Just to give LBF enough time
-                                   line_buffer=ar.stderr_line_buffer)
-            with lbf:
-                # Break `leader.mesos` DNS entry
-                dns_server_mock.remove_dns_entry('leader.mesos.')
-
-                # Wait for the cache to be old enough to be considered stale by
-                # AR:
-                # cache_max_age_soft_limit + extra delay in order to avoid
-                # race conditions
-                delay = 2
-                time.sleep(cache_max_age_soft_limit + delay)
-
-                # Perform the main/test request:
-                resp = requests.get(url,
-                                    allow_redirects=False,
-                                    headers=valid_user_header)
-                assert resp.status_code == 200
-
-            assert lbf.extra_matches == {}
-
     # This test can succed 40-50% number of times if we remove the fix. Hence
     # we re-run it here 5 times.
     @pytest.mark.parametrize('execution_number', range(5))
@@ -810,10 +735,10 @@ class TestCache:
 class TestCacheMesosLeader:
     def test_if_unset_hostip_var_is_handled(self, nginx_class, valid_user_header):
         filter_regexp = {
-            'Private IP address of the host is unknown, ' +
-            'aborting cache-entry creation for mesos leader':
-                SearchCriteria(1, True),
-            'mesos leader cache has been successfully updated':
+            ('Private IP address of the host is unknown, '
+                'aborting cache-entry creation for mesos leader'):
+                    SearchCriteria(1, True),
+            'Updated mesos leader cache':
                 SearchCriteria(1, True),
         }
         ar = nginx_class(host_ip=None)
@@ -833,7 +758,7 @@ class TestCacheMesosLeader:
         filter_regexp = {
             'Failed to instantiate the resolver': SearchCriteria(0, True),
             'DNS server returned error code': SearchCriteria(1, True),
-            'mesos leader cache has been successfully updated':
+            'Updated mesos leader cache':
                 SearchCriteria(0, True),
         }
 
@@ -865,19 +790,19 @@ class TestCacheMesosLeader:
             'Failed to instantiate the resolver': SearchCriteria(0, True),
             'mesos leader is non-local: `{}`'.format(nonlocal_leader_ip):
                 SearchCriteria(1, True),
-            'Private IP address of the host is unknown, ' +
-            'aborting cache-entry creation for mesos leader':
-                SearchCriteria(0, True),
-            'mesos leader cache has been successfully updated':
+            ('Private IP address of the host is unknown, '
+                'aborting cache-entry creation for mesos leader'):
+                    SearchCriteria(0, True),
+            'Updated mesos leader cache':
                 SearchCriteria(1, True),
         }
         filter_regexp_post = {
             'Failed to instantiate the resolver': SearchCriteria(0, True),
             'mesos leader is local': SearchCriteria(1, True),
-            'Private IP address of the host is unknown, ' +
-            'aborting cache-entry creation for mesos leader':
-                SearchCriteria(0, True),
-            'mesos leader cache has been successfully updated':
+            ('Private IP address of the host is unknown, '
+                'aborting cache-entry creation for mesos leader'):
+                    SearchCriteria(0, True),
+            'Updated mesos leader cache':
                 SearchCriteria(1, True),
         }
 
@@ -1132,6 +1057,54 @@ class TestCacheMarathon:
         self._assert_filter_regexp_for_invalid_app(
             filter_regexp, app, nginx_class, mocker, valid_user_header)
 
+    def test_app_container_networking_with_invalid_port_mapping_index_label(
+            self, nginx_class, mocker, valid_user_header):
+        app = self._scheduler_alwaysthere_app()
+        app["labels"]["DCOS_SERVICE_PORT_INDEX"] = "1"
+        app['networks'] = [{'mode': 'container', 'name': 'samplenet'}]
+        app['container']['portMappings'] = [{'containerPort': 16000, 'hostPort': 16000}]
+
+        message = (
+            "Cannot find port in container portMappings at Marathon "
+            "port index '1' for app '{app_id}'"
+        ).format(app_id=app["id"])
+        filter_regexp = {message: SearchCriteria(1, True)}
+        self._assert_filter_regexp_for_invalid_app(
+            filter_regexp, app, nginx_class, mocker, valid_user_header)
+
+    def test_app_container_networking_with_invalid_task_port_index_label(
+            self, nginx_class, mocker, valid_user_header):
+        app = self._scheduler_alwaysthere_app()
+        app["labels"]["DCOS_SERVICE_PORT_INDEX"] = "1"
+        app['networks'] = [{'mode': 'container', 'name': 'samplenet'}]
+        app['container']['portMappings'] = [
+            {'containerPort': 7777, 'hostPort': 16000},
+            {'containerPort': 0},
+        ]
+
+        message = (
+            "Cannot find port in task ports at Marathon "
+            "port index '1' for app '{app_id}'"
+        ).format(app_id=app["id"])
+        filter_regexp = {message: SearchCriteria(1, True)}
+        self._assert_filter_regexp_for_invalid_app(
+            filter_regexp, app, nginx_class, mocker, valid_user_header)
+
+    @pytest.mark.parametrize('networking_mode', ['container/bridge', 'host'])
+    def test_app_networking_with_invalid_task_port_index_label(
+            self, nginx_class, mocker, valid_user_header, networking_mode):
+        app = self._scheduler_alwaysthere_app()
+        app["labels"]["DCOS_SERVICE_PORT_INDEX"] = "1"
+        app['networks'] = [{'mode': networking_mode}]
+
+        message = (
+            "Cannot find port in task ports at Marathon "
+            "port index '1' for app '{app_id}'"
+        ).format(app_id=app["id"])
+        filter_regexp = {message: SearchCriteria(1, True)}
+        self._assert_filter_regexp_for_invalid_app(
+            filter_regexp, app, nginx_class, mocker, valid_user_header)
+
     def test_app_with_port_index_nan_label(
             self, nginx_class, mocker, valid_user_header):
         app = self._scheduler_alwaysthere_app()
@@ -1179,19 +1152,6 @@ class TestCacheMarathon:
         filter_regexp = {
             "Cannot find host or ip for app '{}'".format(app["id"]):
                 SearchCriteria(1, True),
-        }
-
-        self._assert_filter_regexp_for_invalid_app(
-            filter_regexp, app, nginx_class, mocker, valid_user_header)
-
-    def test_app_without_task_specified_port_idx(
-            self, nginx_class, mocker, valid_user_header):
-        app = self._scheduler_alwaysthere_app()
-        app["labels"]["DCOS_SERVICE_PORT_INDEX"] = "5"
-
-        filter_regexp = {
-            "Cannot find port at Marathon port index '5' for app '{}'".format(
-                app["id"]): SearchCriteria(1, True),
         }
 
         self._assert_filter_regexp_for_invalid_app(

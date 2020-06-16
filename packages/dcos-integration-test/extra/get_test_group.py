@@ -17,15 +17,16 @@ import click
 import yaml
 
 
-def patterns_from_group(group_name: str) -> List[str]:
+def patterns_from_group(group_name: str, test_groups_path: str='test_groups.yaml') -> List[str]:
     """
     Given a group name, return all the pytest patterns defined for that group
     in ``test_groups.yaml``.
     """
-    test_group_file = Path('test_groups.yaml')
+    test_group_file = Path(test_groups_path)
     test_group_file_contents = test_group_file.read_text()
     test_groups = yaml.load(test_group_file_contents)['groups']
-    return test_groups[group_name]
+    group = test_groups[group_name]  # type: List[str]
+    return group
 
 
 @click.command('list-integration-test-patterns')

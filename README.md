@@ -9,7 +9,7 @@ Like traditional operating systems, DC/OS is system software that manages comput
 
 Unlike traditional operating systems, DC/OS spans multiple machines within a network, aggregating their resources to maximize utilization by distributed applications.
 
-To learn more, see the [DC/OS Overview](https://dcos.io/docs/latest/overview/).
+To learn more, see the [DC/OS Overview](https://docs.d2iq.com/mesosphere/dcos/latest/overview/).
 
 
 # How Do I...?
@@ -35,8 +35,8 @@ To find the git SHA of any given release, check the latest commit in the version
 | Release Type | URL Pattern |
 |--------------|--------------------|
 | Latest Stable| `https://downloads.dcos.io/dcos/stable/dcos_generate_config.sh` |
-| Latest Master | `https://downloads.dcos.io/dcos/testing/master/dcos_generate_config.sh` |
-| Specific PR, Latest Build	| `https://downloads.dcos.io/dcos/testing/pull/<github-pr-number>/dcos_generate_config.sh` |
+| Latest Master| `https://downloads.dcos.io/dcos/testing/master/dcos_generate_config.sh` |
+| Latest Build of Specific PR| `https://downloads.dcos.io/dcos/testing/pull/<github-pr-number>/dcos_generate_config.sh` |
 
 
 # Development Environment
@@ -47,6 +47,7 @@ To find the git SHA of any given release, check the latest commit in the version
     - Docker doesn't have all the features needed on OS X or Windows
     - `tar` needs to be GNU tar for the set of flags used
     - `unzip` needs to be installed
+1. [pre-commit](https://pre-commit.com)
 1. [tox](https://tox.readthedocs.org/en/latest/)
 1. git 1.8.5+
 1. Docker 1.11+
@@ -112,7 +113,7 @@ The tests can be run via Pytest while SSH'd as root into a master node of the cl
 1. Add the test user
 
     ```
-    dcos-shell python /opt/mesosphere/active/dcos-oauth/bin/dcos_add_user.py albert@bekstil.net
+    dcos-shell python /opt/mesosphere/bin/dcos_add_user.py albert@bekstil.net
     ```
 
     Running the above mentioned command will result in an output
@@ -273,21 +274,20 @@ Pull requests automatically trigger a new DC/OS build and run several tests. The
 | Status Check                                   | Purpose                                                                                                                 | Source and Dependencies                                                                                |
 |------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------|
 | continuous-integration/jenkins/pr-head         | Admin Router Endpoint tests                                                                                             | [dcos/dcos/packages/adminrouter/extra/src/test-harness](https://github.com/dcos/dcos/tree/master/packages/adminrouter/extra/src/test-harness) Docker Dependency: [dcos/dcos/packages/adminrouter](https://github.com/dcos/dcos/blob/master/packages/adminrouter/buildinfo.json) |
-| mergebot/enterprise/build-status/aggregate     | EE Test Enforcement                                                                                                     | Private [mesosphere/dcos-enterprise](https://github.com/mesosphere/dcos-enterprise) repo is tested against the SHA.                                             |
-| mergebot/enterprise/has_ship-it                | Code Review Enforcement                                                                                                 | Private [Mergebot](https://github.com/mesosphere/mergebot) service in prod cluster                                                                       |
+| mergebot/enterprise/build-status/aggregate     | EE Test Enforcement                                                                                                     | Private [mesosphere/dcos-enterprise](https://github.com/mesosphere/dcos-enterprise) repo is tested against the SHA.|
+| mergebot/enterprise/has_ship-it                | Code Review Enforcement                                                                                                 | Private [Mergebot](https://github.com/mesosphere/mergebot) service in prod cluster                     |
 | mergebot/enterprise/review/approved/min_2      | Code Review Enforcement                                                                                                 | Mergebot service in prod cluster                                                                       |
 | mergebot/has_ship-it                           | Code Review Enforcement                                                                                                 | Mergebot service in prod cluster                                                                       |
 | mergebot/review/approved/min_2                 | Code Review Enforcement                                                                                                 | Mergebot service in prod cluster                                                                       |
-| teamcity/dcos/build/dcos                       | Builds DCOS Image (dcos_generate_config.sh)                                                                             | [gen/build_deploy/bash.py](https://github.com/dcos/dcos/blob/master/gen/build_deploy/bash.py)                                                                            |
-| teamcity/dcos/build/tox                        | Runs check-style, unit-tests                                                                                            | [tox.ini](https://github.com/dcos/dcos/blob/master/tox.ini)                                                                                                |
-| teamcity/dcos/build/tox/windows                | Runs tox for the Windows Build                                                                                          | [azure-ci-dependencies](https://github.com/dcos/azure-ci-dependencies/blob/master/scripts/dcos-windows-tox-tests.ps1) |
-| teamcity/dcos/test/aws/cloudformation/simple   | Deployment using single-master-cloudformation.json and runs integration tests                                           | [gen/build_deploy/aws.py](https://github.com/dcos/dcos/blob/master/gen/build_deploy/aws.py), Uses [dcos-launch](https://github.com/dcos/dcos-launch/) binary in CI                                                 |
-| teamcity/dcos/test/aws/onprem/static/group{1..n}  | Installation via dcos_generation_config.sh and runs Integration Tests                                                | [gen/build_deploy/bash.py](https://github.com/dcos/dcos/blob/master/gen/build_deploy/bash.py), Uses [dcos-launch](https://github.com/dcos/dcos-launch/) binary in CI                                                |
+| teamcity/dcos/build/dcos                       | Builds DCOS Image (dcos_generate_config.sh)                                                                             | [gen/build_deploy/bash.py](https://github.com/dcos/dcos/blob/master/gen/build_deploy/bash.py)          |
+| teamcity/dcos/build/tox                        | Runs check-style, unit-tests                                                                                            | [tox.ini](https://github.com/dcos/dcos/blob/master/tox.ini)                                            |
+| teamcity/dcos/test/aws/cloudformation/simple   | Deployment using single-master-cloudformation.json and runs integration tests                                           | [gen/build_deploy/aws.py](https://github.com/dcos/dcos/blob/master/gen/build_deploy/aws.py),           |
+| teamcity/dcos/test/terraform/aws/onprem/static/group{1..n}  | Installation via dcos_generation_config.sh and runs Integration Tests                                                | [gen/build_deploy/bash.py](https://github.com/dcos/dcos/blob/master/gen/build_deploy/bash.py), |
 | teamcity/dcos/test/test-e2e/group{1..n}        | End to End Tests. Each Test launches a cluster, exercises a functionality.                                              | [test-e2e](https://github.com/dcos/dcos/tree/master/test-e2e)
 
 ### Required vs Non-Required Status checks
 
-A PR status check may be marked as **Required** or **Not-Required** (Default).The required status checks are neccessary for applying a ship-it label, which makes the PR eligible for merge.
+A PR status check may be marked as **Required** or **Not-Required** (Default). The required status checks are necessary for applying a ship-it label, which makes the PR eligible for merge.
 A non-required status check is completely informational, and the success or the failure of the status check does not, in any way, impact the merge of the PR.
 
 The required status checks are encoded in the repo's megebot-config (For .e.g: https://github.com/dcos/dcos/blob/master/mergebot-config.json#L38)

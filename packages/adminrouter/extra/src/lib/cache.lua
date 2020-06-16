@@ -111,27 +111,31 @@ local function request(url, accept_404_reply, auth_token)
     -- method takes care of parsing scheme, host, and port from the URL.
     local httpc = http.new()
     httpc:set_timeout(_CONFIG.CACHE_BACKEND_REQUEST_TIMEOUT * 1000)
+    ngx.update_time()
+    local start = ngx.now()
     local res, err = httpc:request_uri(url, {
         method="GET",
         headers=headers,
         ssl_verify=true
     })
+    ngx.update_time()
+    local stop = ngx.now()
 
     if not res then
+        ngx.log(ngx.WARN, "< " .. url .. " " .. string.format("%.3f", stop - start) .. ": " .. err)
         return nil, err
     end
+
+    ngx.log(
+        ngx.INFO, "< " .. url .. " code=" .. res.status .. 
+            " len=(" .. string.len(res.body) .. ") " .. string.format("%.3f", stop - start)
+    )
 
     if res.status ~= 200 then
         if accept_404_reply and res.status ~= 404 or not accept_404_reply then
             return nil, "invalid response status: " .. res.status
         end
     end
-
-    ngx.log(
-        ngx.NOTICE,
-        "Request url: " .. url .. " " ..
-        "Response Body length: " .. string.len(res.body) .. " bytes."
-        )
 
     return res, nil
 end
@@ -147,7 +151,7 @@ end
 local function fetch_and_store_marathon_apps(auth_token)
     -- Access Marathon through localhost.
     ngx.log(ngx.NOTICE, "Cache Marathon app state")
-    local appsRes, err = request(UPSTREAM_MARATHON .. "/v2/apps?embed=apps.tasks&label=DCOS_SERVICE_NAME",
+    local appsRes, err = request(init.UPSTREAM_MARATHON .. "/v2/apps?embed=apps.tasks&label=DCOS_SERVICE_NAME",
                                  false,
                                  auth_token)
 
@@ -197,6 +201,10 @@ local function fetch_and_store_marathon_apps(auth_token)
 
        local tasks = app["tasks"]
 
+       if tasks == nil then
+           ngx.log(ngx.NOTICE, "No tasks for app '" .. appId .. "'")
+           goto continue
+       end
        -- Process only tasks in TASK_RUNNING state.
        -- From http://lua-users.org/wiki/TablesTutorial: "inside a pairs loop,
        -- it's safe to reassign existing keys or remove them"
@@ -255,15 +263,47 @@ local function fetch_and_store_marathon_apps(auth_token)
        -- In "container/bridge" and "host" networking modes we need to use the
        -- host port for routing (available via task's ports array)
        local port
-       if is_container_network(app) and app["container"]["portMappings"][portIdx]["containerPort"] ~= 0 then
-         port = app["container"]["portMappings"][portIdx]["containerPort"]
-       else
-         port = task["ports"][portIdx]
+       if is_container_network(app) then
+
+           -- Special case, meaning no ports defined for app in container networking mode.
+           if next(app["container"]["portMappings"]) == nil then
+               goto continue
+           end
+
+           -- In every other case portMappings exist with at least the default.
+           -- Skip routing if DCOS_SERVICE_PORT_INDEX points out of bounds of existing portMappings.
+           if not app["container"]["portMappings"][portIdx] then
+               ngx.log(ngx.NOTICE, "Cannot find port in container portMappings at Marathon port index '" .. (portIdx - 1) .. "' for app '" .. appId .. "'")
+               goto continue
+           end
+
+           -- If the portMapping exists containerPort always exists.
+           -- https://mesosphere.github.io/marathon/docs/networking.html#port-mappings
+           -- For any other case route to the containerPort in container networking mode.
+           -- NOTE(tweidner): I believe this is unnecessary, containerPort 0 is not a special case.
+           if app["container"]["portMappings"][portIdx]["containerPort"] ~= 0 then
+               port = app["container"]["portMappings"][portIdx]["containerPort"]
+           end
        end
 
+       -- If the containerPort was randomly assigned or any other networking mode is used
+       -- try routing to the task ports assigned by Mesos for the given Marathon app.
        if not port then
-          ngx.log(ngx.NOTICE, "Cannot find port at Marathon port index '" .. (portIdx - 1) .. "' for app '" .. appId .. "'")
-          goto continue
+
+           -- Skip routing if the Mesos task does not include the ports field.
+           if not task["ports"] then
+               ngx.log(ngx.NOTICE, "Task ports field is not defined for app '" .. appId .. "'")
+               goto continue
+           end
+
+           -- Skip routing if DCOS_SERVICE_PORT_INDEX points out of bounds of existing task ports.
+           if not task["ports"][portIdx] then
+               ngx.log(ngx.NOTICE, "Cannot find port in task ports at Marathon port index '" .. (portIdx - 1) .. "' for app '" .. appId .. "'")
+               goto continue
+           end
+
+           -- For any other case route to the task port assigned by Mesos.
+           port = task["ports"][portIdx]
        end
 
        -- Details on how Admin Router interprets DCOS_SERVICE_REWRITE_REQUEST_URLS label:
@@ -316,7 +356,7 @@ local function fetch_and_store_marathon_apps(auth_token)
     ngx.update_time()
     local time_now = ngx.now()
     if cache_data("svcapps_last_refresh", time_now) then
-        ngx.log(ngx.INFO, "Marathon apps cache has been successfully updated")
+        ngx.log(ngx.INFO, "Updated Marathon apps cache")
     end
 
     return
@@ -326,12 +366,12 @@ function store_leader_data(leader_name, leader_ip)
 
     local mleader
 
-    if HOST_IP == 'unknown' or leader_ip == 'unknown' then
+    if init.HOST_IP == 'unknown' or leader_ip == 'unknown' then
         ngx.log(ngx.ERR,
         "Private IP address of the host is unknown, aborting cache-entry creation for ".. leader_name .. " leader")
         mleader = '{"is_local": "unknown", "leader_ip": null}'
-    elseif leader_ip == HOST_IP then
-        mleader = '{"is_local": "yes", "leader_ip": "'.. HOST_IP ..'"}'
+    elseif leader_ip == init.HOST_IP then
+        mleader = '{"is_local": "yes", "leader_ip": "'.. init.HOST_IP ..'"}'
         ngx.log(ngx.INFO, leader_name .. " leader is local")
     else
         mleader = '{"is_local": "no", "leader_ip": "'.. leader_ip ..'"}'
@@ -347,7 +387,7 @@ function store_leader_data(leader_name, leader_ip)
     ngx.update_time()
     local time_now = ngx.now()
     if cache_data(leader_name .. "_leader_last_refresh", time_now) then
-        ngx.log(ngx.INFO, leader_name .. " leader cache has been successfully updated")
+        ngx.log(ngx.INFO, "Updated " .. leader_name .. " leader cache")
     end
 
     return
@@ -388,7 +428,7 @@ end
 
 local function fetch_and_store_marathon_leader(auth_token)
     local leader_ip = fetch_generic_leader(
-        UPSTREAM_MARATHON .. "/v2/leader", "marathon", auth_token)
+        init.UPSTREAM_MARATHON .. "/v2/leader", "marathon", auth_token)
 
     if leader_ip ~= nil then
         store_leader_data("marathon", leader_ip)
@@ -399,7 +439,7 @@ end
 local function fetch_and_store_state_mesos(auth_token)
     -- Fetch state JSON summary from Mesos. If successful, store to SHM cache.
     -- Expected to run within lock context.
-    local response, err = request(UPSTREAM_MESOS .. "/master/state-summary",
+    local response, err = request(init.UPSTREAM_MESOS .. "/master/state-summary",
                                   false,
                                   auth_token)
 
@@ -446,7 +486,7 @@ local function fetch_and_store_state_mesos(auth_token)
     ngx.update_time()
     local time_now = ngx.now()
     if cache_data("mesosstate_last_refresh", time_now) then
-        ngx.log(ngx.INFO, "Mesos state cache has been successfully updated")
+        ngx.log(ngx.INFO, "Updated Mesos state cache")
     end
 
     return

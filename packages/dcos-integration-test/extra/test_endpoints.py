@@ -1,17 +1,19 @@
 import ipaddress
 import urllib.parse
 
+from typing import Any
+
 import bs4
 import pytest
+
+from dcos_test_utils.dcos_api import DcosApiSession
 from requests.exceptions import ConnectionError
-from retrying import retry
 
 __maintainer__ = 'vespian'
 __contact__ = 'dcos-security@mesosphere.io'
 
 
-@pytest.mark.supportedwindows
-def test_if_dcos_ui_is_up(dcos_api_session):
+def test_if_dcos_ui_is_up(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/')
 
     assert r.status_code == 200
@@ -30,8 +32,7 @@ def test_if_dcos_ui_is_up(dcos_api_session):
         assert link_response.status_code == 200
 
 
-@pytest.mark.supportedwindows
-def test_if_mesos_is_up(dcos_api_session):
+def test_if_mesos_is_up(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/mesos')
 
     assert r.status_code == 200
@@ -39,7 +40,7 @@ def test_if_mesos_is_up(dcos_api_session):
     assert '<title>Mesos</title>' in r.text
 
 
-def test_if_all_mesos_slaves_have_registered(dcos_api_session):
+def test_if_all_mesos_slaves_have_registered(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/mesos/master/slaves')
     assert r.status_code == 200
 
@@ -49,8 +50,7 @@ def test_if_all_mesos_slaves_have_registered(dcos_api_session):
     assert slaves_ips == dcos_api_session.all_slaves
 
 
-@pytest.mark.supportedwindows
-def test_if_exhibitor_api_is_up(dcos_api_session):
+def test_if_exhibitor_api_is_up(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.exhibitor.get('/exhibitor/v1/cluster/list')
     assert r.status_code == 200
 
@@ -58,15 +58,13 @@ def test_if_exhibitor_api_is_up(dcos_api_session):
     assert data["port"] > 0
 
 
-@pytest.mark.supportedwindows
-def test_if_exhibitor_ui_is_up(dcos_api_session):
+def test_if_exhibitor_ui_is_up(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.exhibitor.get('/')
     assert r.status_code == 200
     assert 'Exhibitor for ZooKeeper' in r.text
 
 
-@pytest.mark.supportedwindows
-def test_if_zookeeper_cluster_is_up(dcos_api_session):
+def test_if_zookeeper_cluster_is_up(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/exhibitor/exhibitor/v1/cluster/status')
     assert r.status_code == 200
 
@@ -80,31 +78,21 @@ def test_if_zookeeper_cluster_is_up(dcos_api_session):
     assert zks_leaders == 1
 
 
-@pytest.mark.supportedwindows
-def test_if_uiconfig_is_available(dcos_api_session):
+def test_if_uiconfig_is_available(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/dcos-metadata/ui-config.json')
 
     assert r.status_code == 200
     assert 'uiConfiguration' in r.json()
 
 
-def test_if_version_is_available(dcos_api_session):
+def test_if_version_is_available(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/dcos-metadata/dcos-version.json')
 
     assert r.status_code == 200
     assert 'version' in r.json()
 
 
-@pytest.mark.supportedwindows
-def test_if_dcos_history_service_is_up(dcos_api_session):
-    r = dcos_api_session.get('/dcos-history-service/ping')
-
-    assert r.status_code == 200
-    assert 'pong' == r.text
-
-
-@pytest.mark.supportedwindows
-def test_if_marathon_is_up(dcos_api_session):
+def test_if_marathon_is_up(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/marathon/v2/info')
 
     assert r.status_code == 200
@@ -113,15 +101,13 @@ def test_if_marathon_is_up(dcos_api_session):
     assert "marathon" == response_json["name"]
 
 
-@pytest.mark.supportedwindows
-def test_if_marathon_ui_redir_works(dcos_api_session):
+def test_if_marathon_ui_redir_works(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/marathon')
     assert r.status_code == 200
     assert '<title>Marathon</title>' in r.text
 
 
-@pytest.mark.supportedwindows
-def test_if_srouter_service_endpoint_works(dcos_api_session):
+def test_if_srouter_service_endpoint_works(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/service/marathon/v2/info')
 
     assert r.status_code == 200
@@ -132,8 +118,7 @@ def test_if_srouter_service_endpoint_works(dcos_api_session):
     assert "version" in response_json
 
 
-@pytest.mark.supportedwindows
-def test_if_mesos_api_is_up(dcos_api_session):
+def test_if_mesos_api_is_up(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/mesos_dns/v1/version')
     assert r.status_code == 200
 
@@ -141,8 +126,7 @@ def test_if_mesos_api_is_up(dcos_api_session):
     assert data["Service"] == 'Mesos-DNS'
 
 
-@pytest.mark.supportedwindows
-def test_if_pkgpanda_metadata_is_available(dcos_api_session):
+def test_if_pkgpanda_metadata_is_available(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/pkgpanda/active.buildinfo.full.json')
     assert r.status_code == 200
 
@@ -151,22 +135,7 @@ def test_if_pkgpanda_metadata_is_available(dcos_api_session):
     assert len(data) > 5  # (prozlach) We can try to put minimal number of pacakages required
 
 
-def test_if_dcos_history_service_is_getting_data(dcos_api_session):
-    @retry(stop_max_delay=20000, wait_fixed=500)
-    def check_up():
-        r = dcos_api_session.get('/dcos-history-service/history/last')
-        assert r.status_code == 200
-        # Make sure some basic fields are present from state-summary which the DC/OS
-        # UI relies upon. Their exact content could vary so don't test the value.
-        json = r.json()
-        assert {'cluster', 'frameworks', 'slaves', 'hostname'} <= json.keys()
-        assert len(json["slaves"]) == len(dcos_api_session.all_slaves)
-
-    check_up()
-
-
-@pytest.mark.supportedwindows
-def test_if_we_have_capabilities(dcos_api_session):
+def test_if_we_have_capabilities(dcos_api_session: DcosApiSession) -> None:
     """Indirectly test that Cosmos is up since this call is handled by Cosmos.
     """
     r = dcos_api_session.get(
@@ -179,7 +148,7 @@ def test_if_we_have_capabilities(dcos_api_session):
     assert {'name': 'PACKAGE_MANAGEMENT'} in r.json()['capabilities']
 
 
-def test_if_overlay_master_is_up(dcos_api_session):
+def test_if_overlay_master_is_up(dcos_api_session: DcosApiSession) -> None:
     r = dcos_api_session.get('/mesos/overlay-master/state')
     assert r.ok, "status_code: {}, content: {}".format(r.status_code, r.content)
 
@@ -204,7 +173,7 @@ def test_if_overlay_master_is_up(dcos_api_session):
     assert nested_match(dcos_overlay_network, json['network'])
 
 
-def test_if_overlay_master_agent_is_up(dcos_api_session):
+def test_if_overlay_master_agent_is_up(dcos_api_session: DcosApiSession) -> None:
     master_response = dcos_api_session.get('/mesos/overlay-master/state')
     assert master_response.ok,\
         "status_code: {}, content: {}".format(master_response.status_code, master_response.content)
@@ -233,13 +202,13 @@ def test_if_overlay_master_agent_is_up(dcos_api_session):
 
     for agent_overlay in agent_overlay_json['overlays']:
         overlay_name = agent_overlay['info']['name']
-        if master_agent_overlays[0]['info']['name'] == overlay_name:
-            _validate_dcos_overlay(overlay_name, agent_overlay, master_agent_overlays[0])
+        if master_agent_overlays[0]['info']['name'] == overlay_name:  # type: ignore
+            _validate_dcos_overlay(overlay_name, agent_overlay, master_agent_overlays[0])  # type: ignore
         else:
-            _validate_dcos_overlay(overlay_name, agent_overlay, master_agent_overlays[1])
+            _validate_dcos_overlay(overlay_name, agent_overlay, master_agent_overlays[1])  # type: ignore
 
 
-def _validate_dcos_overlay(overlay_name, agent_overlay, master_agent_overlay):
+def _validate_dcos_overlay(overlay_name: str, agent_overlay: dict, master_agent_overlay: dict) -> None:
 
     if overlay_name == 'dcos':
         assert 'subnet' in agent_overlay
@@ -301,7 +270,7 @@ def _validate_dcos_overlay(overlay_name, agent_overlay, master_agent_overlay):
     assert nested_match(expected, agent_overlay)
 
 
-def _validate_overlay_subnet(agent_subnet, overlay_subnet, prefixlen):
+def _validate_overlay_subnet(agent_subnet: str, overlay_subnet: Any, prefixlen: Any) -> None:
     try:
         allocated_subnet = ipaddress.ip_network(agent_subnet)
         assert allocated_subnet.prefixlen == prefixlen
@@ -312,7 +281,7 @@ def _validate_overlay_subnet(agent_subnet, overlay_subnet, prefixlen):
             network address: " + str(ex)) from ex
 
 
-def _validate_overlay_backend(overlay_name, backend):
+def _validate_overlay_backend(overlay_name: str, backend: dict) -> None:
     try:
         # Make sure the backend has the right VNI.
         vxlan = backend['vxlan']
@@ -339,8 +308,7 @@ def _validate_overlay_backend(overlay_name, backend):
         raise AssertionError("Could not find key :" + str(ex)) from ex
 
 
-@pytest.mark.supportedwindows
-def test_if_cosmos_is_only_available_locally(dcos_api_session):
+def test_if_cosmos_is_only_available_locally(dcos_api_session: DcosApiSession) -> None:
     # One should not be able to connect to the cosmos HTTP and admin ports
     # over non-lo interfaces
     msg = "Cosmos reachable from non-lo interface"
@@ -362,7 +330,7 @@ def test_if_cosmos_is_only_available_locally(dcos_api_session):
     assert r.status_code == 200
 
 
-def nested_match(expect, value):
+def nested_match(expect: Any, value: dict) -> bool:
     if expect == value:
         return True
     if isinstance(expect, dict) and isinstance(value, dict):

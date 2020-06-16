@@ -80,6 +80,12 @@ function util.get_stripped_first_line_from_file(path)
 end
 
 
+function util.path_join(d, p)
+    -- package.config:sub(1,1) is \ on Windows and / elsewhere
+    return d .. package.config:sub(1,1) .. p
+end
+
+
 function util.get_file_content(path)
     local f, err = io.open(path, "rb")
     if f then
@@ -131,12 +137,6 @@ function util.set_leader_host(leader_name, local_upstream, skip_prefix_iflocal)
     end
 
     if mleader['is_local'] == 'yes' then
-        -- Let's adjust the URI we send to the upstream service/remove the
-        -- `/dcos-history-service` prefix:
-        if skip_prefix_iflocal ~= nil then
-            local next_char = string.len(skip_prefix_iflocal) + 1
-            ngx.req.set_uri(string.sub(ngx.var.uri, next_char))
-        end
         ngx.var.leader_host = local_upstream
     else
         -- Let's prevent infinite proxy loops during failovers. Prefixing
@@ -149,7 +149,7 @@ function util.set_leader_host(leader_name, local_upstream, skip_prefix_iflocal)
         else
             ngx.req.set_header("DCOS-Forwarded", "true")
         end
-        ngx.var.leader_host = DEFAULT_SCHEME .. mleader["leader_ip"]
+        ngx.var.leader_host = init.DEFAULT_SCHEME .. mleader["leader_ip"]
     end
 
     ngx.log(ngx.DEBUG, leader_name .. " leader addr from cache: " .. ngx.var.leader_host)

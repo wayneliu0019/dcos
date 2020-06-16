@@ -4,7 +4,7 @@ Takes in a bunch of configuration files, as well as functions to calculate the v
 need to be put into the configuration.
 
 Operates strictly:
-  - All paramaters are strings. All things calculated / derived are strings.
+  - All parameters are strings. All things calculated / derived are strings.
   - Every given parameter must map to some real config option.
   - Every config option must be given only once.
   - Defaults can be overridden. If no default is given, the parameter must be specified
@@ -24,6 +24,7 @@ from typing import List
 import yaml
 
 import gen.calc
+import gen.exhibitor_tls_bootstrap
 import gen.internals
 import gen.template
 import gen.util
@@ -39,7 +40,6 @@ from pkgpanda.constants import (
 from pkgpanda.util import (
     hash_checkout,
     is_absolute_path,
-    is_windows,
     json_prettyprint,
     load_string,
     split_by_token,
@@ -53,10 +53,7 @@ role_names = {"master", "slave", "slave_public"}
 
 role_template = config_dir + '/roles/{}'
 
-if is_windows:
-    CLOUDCONFIG_KEYS = {'runcmd', 'root', 'mounts', 'disk_setup', 'fs_setup', 'bootcmd'}
-else:
-    CLOUDCONFIG_KEYS = {'coreos', 'runcmd', 'apt_sources', 'root', 'mounts', 'disk_setup', 'fs_setup', 'bootcmd'}
+CLOUDCONFIG_KEYS = {'coreos', 'runcmd', 'apt_sources', 'root', 'mounts', 'disk_setup', 'fs_setup', 'bootcmd'}
 PACKAGE_KEYS = {'package', 'root'}
 
 
@@ -454,12 +451,7 @@ def get_dcosconfig_source_target_and_templates(
     log.info("Generating configuration files...")
 
     # TODO(cmaloney): Make these all just defined by the base calc.py
-    # There are separate configuration files for windows vs non-windows as a lot
-    # of configuration on windows will be different.
-    if is_windows:
-        config_package_names = ['dcos-config-windows', 'dcos-metadata']
-    else:
-        config_package_names = ['dcos-config', 'dcos-metadata']
+    config_package_names = ['dcos-config', 'dcos-metadata']
 
     template_filenames = [dcos_config_yaml, cloud_config_yaml, 'dcos-metadata.yaml', dcos_services_yaml]
 
@@ -669,6 +661,9 @@ def generate(
     argument_dict['expanded_config_full'] = format_expanded_config(expanded_config_full)
     argument_dict['expanded_config'] = format_expanded_config(expanded_config_scrubbed)
 
+    # Initialize CA and add arguments (exhibitor_ca_certificate and exhibitor_ca_certificate_path)
+    gen.exhibitor_tls_bootstrap.initialize_exhibitor_ca(argument_dict)
+
     log.debug(
         "Final arguments:" + json_prettyprint({
             # Mask secret config values.
@@ -727,7 +722,7 @@ def generate(
         # using the values from the late config file.
         late_package_id = PackageId(late_package['name'])
         late_package_filename = make_package_filename(late_package_id, '.dcos_config')
-        os.makedirs(os.path.dirname(late_package_filename), mode=0o755)
+        os.makedirs(os.path.dirname(late_package_filename), mode=0o755, exist_ok=True)
         write_yaml(late_package_filename, {'package': late_package['package']}, default_flow_style=False)
         log.info('Package filename: {}'.format(late_package_filename))
         stable_artifacts.append(late_package_filename)
