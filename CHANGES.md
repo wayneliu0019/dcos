@@ -1,16 +1,56 @@
 Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos/dcos/wiki/CHANGES.md-guidelines). Thank you!
 
-## DC/OS 1.12.5 (in development)
+## DC/OS 1.12.6 (in development)
 
-* Updated Signal service to release [1.6.0](https://github.com/dcos/dcos-signal/releases/tag/1.6.0)
-
-* Updated DC/OS UI to [1.12+v2.26.16](https://github.com/dcos/dcos-ui/releases/tag/1.12+v2.26.16).
+* Updated to Mesos [1.7.3-dev](https://github.com/apache/mesos/blob/3c4691e1c13d2908389436794b420dd9e19bd92a/CHANGELOG)
 
 ### Notable changes
 
-* Updated DC/OS UI to [1.12+v2.26.16](https://github.com/dcos/dcos-ui/releases/tag/1.12+v2.26.16)
+### Fixed and improved
+
+* Marathon version bumped to 1.7.236
+
+    * Marathon would sometimes fail to suppress offers (MARATHON-8632)
+    * Unreachable instances would interfere with replacements when using GROUP_BY / UNIQUE placement constraints, even if expungeAfter is configured the same as inactiveAfter (MARATHON-8719)
+    * /v2/tasks plaintext output in Marathon 1.5 returned container network endpoints in an unusable way (MARATHON-8721)
+    * Marathon tried to store Task StatusUpdate without checking the message size, resulting in failure (MARATHON-8698)
+    * Include maintenance mode configuration in info Endpoint (MARATHON-8660)
+    * Marathon would use resources with a disk profile when no disk profile was specified (DCOS_OSS-5211)
+    * Presence of instance with TASK_UNKNOWN mesos task status causes API to fail to respond (MARATHON-8624)
+
+* DC/OS no longer increases the rate limit for journald logging.  Scale testing demonstrated that raising the limit overloads journald, causing problems for other components that see delayed or lost logs or, worse, hang until log buffers are read. The default of 10000 messages per 30 seconds appears to distinguish well between busy components and excessively verbose components. (DCOS-53763)
+
+#### Update Metronome to 0.6.48
+
+* Fix an issue in Metronome where it became unresponsive when lots of pending jobs existed during boot. (DCOS_OSS-5965)
+
+* There was a case where regex validation of project ids was ineffecient for certain inputs. The regex has been optimized. (MARATHON-8730)
+
+* Metronome jobs networking is now configurable (MARATHON-8727)
+
+### Security updates
+
+* Update to OpenSSL 1.0.2u. (D2IQ-66526)
+
+
+## DC/OS 1.12.5 (2019-01-02)
+
+* Updated Signal service to release [1.6.0](https://github.com/dcos/dcos-signal/releases/tag/1.6.0)
+* Signal now sends telemetry data every 5 minutes instead of every hour. This is to align the frequency with DC/OS Enterprise.
+
+* Updated to Mesos [1.7.3-dev](https://github.com/apache/mesos/blob/d8acd9cfacd2edf8500f07f63a8837aa0ddd14ba/CHANGELOG)
+
+* Metronome post-install configuration can be added to `/var/lib/dcos/metronome/environment` (DCOS_OSS-5509)
+
+* Mesos overlay networking: support dropping agents from the state. (DCOS_OSS-5536)
+
+### Notable changes
+
+* Updated DC/OS UI to [1.12+v2.26.18](https://github.com/dcos/dcos-ui/releases/tag/1.12+v2.26.18).
 
 * Updated to [Metronome 0.6.33](https://github.com/dcos/metronome/tree/b8a73dd)
+
+* Added user controlled environment file for Mesos processes (DCOS-49092)
 
 ### Fixed and improved
 
@@ -21,6 +61,26 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 * [Metronome] Updates to fix daylight saving issues.
 
 * Changed `dcos-zk backup` and `dcos-zk restore` to exit early if ZooKeeper is running. (DCOS_OSS-5353)
+
+* Fix preflight docker version check failing for docker 1.19. (DCOS-56831)
+
+* The content of `/var/log/mesos-state.tar.gz` is now included in the diagnostics bundle. (DCOS-56403)
+
+* Prune VIPs with no backends in order to avoid unbounded growth of state and messages exchanged among `dcos-net` processes. (DCOS_OSS-5356)
+
+* DC/OS Net: Fix support for big sets in the ipset manager. (COPS-5229)
+
+* Added new diagnostics bundle REST API with performance improvements. (DCOS_OSS-5098)
+
+* Fixes increasing diagnostics job duration when job is done (DCOS_OSS-5494)
+
+* Remove nogroup creation. (COPS-5220)
+
+* Increase number of diagnostics fetchers (DCOS-51483)
+
+* DC/OS overlay networks should be compared by-value. (DCOS_OSS-5620)
+
+* Reserve all agent VTEP IPs upon recovering from replicated log. (DCOS_OSS-5626)
 
 ### Security updates
 
@@ -114,6 +174,8 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 ### Fixed and improved
 
 * Include additional container metrics if provided (DCOS_OSS-4624)
+
+* Improved the performance of command health checks to increase scalability. (DCOS-53656)
 
 * Tighten permissions on ZooKeeper directories (DCOS-47687)
 
@@ -272,3 +334,5 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 * Upgrade OTP version (DCOS_OSS-3655)
 
 * Marathon framework ID generation is now very conservative. [See more](https://github.com/mesosphere/marathon/blob/master/changelog.md#marathon-framework-id-generation-is-now-very-conservative) (MARATHON-8420)
+
+* Set network interfaces as unmanaged for networkd only on coreos. (DCOS-60956)
