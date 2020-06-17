@@ -61,7 +61,13 @@ RUN set -ex \
         python3-dev \
         python3-pip \
         python3-virtualenv \
+         python3-setuptools \
         rsync
+
+# upgrade pip first
+RUN pip3 install --upgrade pip
+#remove zipp in case version error
+RUN pip3 uninstall zipp
 
 # Upgrading pip/setuptools and making the upgrade actually apply in the
 # following filesystem layers works more reliable when using a virtualenv for
@@ -71,7 +77,7 @@ RUN set -ex \
 #   https://github.com/docker/docker/issues/12327#issuecomment-187158265
 RUN python3 -m pip install --upgrade virtualenv
 RUN set -ex \
-    && virtualenv --no-site-packages $VENV_DIR \
+    && virtualenv  $VENV_DIR \
     && ${VENV_DIR}/bin/pip install --upgrade setuptools pip
 
 ENV PATH ${VENV_DIR}/bin:$PATH
