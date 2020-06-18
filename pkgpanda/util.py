@@ -385,7 +385,7 @@ def make_tar(result_filename, change_folder):
         if is_windows:
             tar_cmd += ["-cjf"]
         else:
-            tar_cmd += ["-cJf"]
+            tar_cmd += ["-cvf"]
     tar_cmd += [result_filename, "-C", change_folder, "."]
     check_call(tar_cmd)
 
