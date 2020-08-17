@@ -1,8 +1,8 @@
 FROM arm64v8/ubuntu:16.04
 
 # Let's try to limit the number of layers to minimum:
-ENV OPENRESTY_VERSION=1.15.8.1 \
-    OPENRESTY_DOWNLOAD_SHASUM=cb8cb132f06c9618bdbe57f5e16f4d9d513a6fe3 \
+ENV OPENRESTY_VERSION=1.13.6.1 \
+    OPENRESTY_DOWNLOAD_SHASUM=775b89cfadf3dbfa13864f3ad4dee4f67dac6604 \
     OPENRESTY_DIR=/usr/local/src/openresty \
     OPENRESTY_COMPILE_SCRIPT=/usr/local/src/build-resty.sh \
     OPENRESTY_COMPILE_OPTS="" \
@@ -18,7 +18,7 @@ ENV OPENRESTY_VERSION=1.15.8.1 \
     IAM_SHARED_SECRET_FILE_PATH=/usr/local/iam.jwt-key.shared-secret
 
 # These depend on other ENV vars, so we need a separate ENV block:
-ENV OPENRESTY_DOWNLOAD_URL=http://openresty.org/download/openresty-$OPENRESTY_VERSION.tar.gz \
+ENV OPENRESTY_DOWNLOAD_URL=https://openresty.org/download/openresty-$OPENRESTY_VERSION.tar.gz \
     AUTH_ERROR_PAGE_DIR_PATH=${AR_BIN_DIR}/nginx/conf/errorpages
 
 WORKDIR /usr/local/src/
@@ -64,13 +64,7 @@ RUN set -ex \
         python3-dev \
         python3-pip \
         python3-virtualenv \
-         python3-setuptools \
         rsync
-
-# upgrade pip first
-RUN pip3 install --upgrade pip
-#remove zipp in case version error
-RUN pip3 uninstall zipp
 
 # Upgrading pip/setuptools and making the upgrade actually apply in the
 # following filesystem layers works more reliable when using a virtualenv for
@@ -78,9 +72,9 @@ RUN pip3 uninstall zipp
 # Refs:
 #   https://github.com/docker/docker/issues/12327#issuecomment-188921470
 #   https://github.com/docker/docker/issues/12327#issuecomment-187158265
-RUN python3 -m pip install --upgrade virtualenv
+RUN python3 -m pip install --upgrade 'virtualenv<20'
 RUN set -ex \
-    && virtualenv  $VENV_DIR \
+    && virtualenv --no-site-packages $VENV_DIR \
     && ${VENV_DIR}/bin/pip install --upgrade setuptools pip
 
 ENV PATH ${VENV_DIR}/bin:$PATH
