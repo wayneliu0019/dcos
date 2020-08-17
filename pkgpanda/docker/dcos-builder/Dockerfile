@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM arm64v8/ubuntu:16.04
 MAINTAINER help@dcos.io
 
 RUN apt-get -qq update && apt-get -y install \
@@ -51,9 +51,9 @@ RUN ln -sf /usr/bin/cpp-4.8 /usr/bin/cpp && \
   ln -sf /usr/bin/gcc-ranlib-4.8 /usr/bin/gcc-ranlib && \
   ln -sf /usr/bin/gcov-4.8 /usr/bin/gcov
 
-ENV GOLANG_VERSION 1.11.5
-ENV GOLANG_DOWNLOAD_URL https://golang.org/dl/go$GOLANG_VERSION.linux-amd64.tar.gz
-ENV GOLANG_DOWNLOAD_SHA256 ff54aafedff961eb94792487e827515da683d61a5f9482f668008832631e5d25
+ENV GOLANG_VERSION 1.11.10
+ENV GOLANG_DOWNLOAD_URL https://golang.org/dl/go$GOLANG_VERSION.linux-arm64.tar.gz
+ENV GOLANG_DOWNLOAD_SHA256 6743c54f0e33873c113cbd66df7749e81785f378567734831c2e5d3b6b6aa2b8
 
 RUN curl -fsSL "$GOLANG_DOWNLOAD_URL" -o golang.tar.gz \
   && echo "$GOLANG_DOWNLOAD_SHA256  golang.tar.gz" | sha256sum -c - \

@@ -1,5 +1,5 @@
 {
-  "docker": "golang:1.11-stretch",
+  "docker": "arm64v8/golang:1.10-stretch",
   "single_source" : {
     "kind": "git",
     "git": "https://github.com/dcos/telegraf.git",

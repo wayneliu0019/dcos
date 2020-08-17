@@ -34,8 +34,9 @@ update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-6 40
 # vendored GRPC library to enter state where it cannot re-open TCP connection.
 # See: https://jira.mesosphere.com/browse/DCOS-61502
 GOLANG_VERSION=1.10.8
-GOLANG_DOWNLOAD_URL=https://golang.org/dl/go$GOLANG_VERSION.linux-amd64.tar.gz
-GOLANG_DOWNLOAD_SHA256=d8626fb6f9a3ab397d88c483b576be41fa81eefcec2fd18562c87626dbb3c39e
+GOLANG_DOWNLOAD_URL=https://golang.org/dl/go$GOLANG_VERSION.linux-arm64.tar.gz
+GOLANG_DOWNLOAD_SHA256=0921a76e78022ec2ae217e85b04940e2e9912b4c3218d96a827deedb9abe1c7b
+
 
 rm -rf /usr/local/go
 curl -fsSL "$GOLANG_DOWNLOAD_URL" -o golang.tar.gz
