@@ -3,7 +3,7 @@
   "sources": {
     "bouncer": {
       "kind": "git",
-      "git": "git@github.com:dcos/bouncer.git",
+      "git": "https://github.com/dcos/bouncer",
       "ref": "4beab0338e6859508d58f254d52942cd7bdd9fbd",
       "ref_origin": "master"
     }
