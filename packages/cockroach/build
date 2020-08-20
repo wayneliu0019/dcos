@@ -60,7 +60,7 @@ make build TYPE=release-linux-gnu CC_PATH=/usr/bin/gcc  CXX_PATH=/usr/bin/g++
 
 # Copy the cockroach binary to the the package bin directory.
 mkdir -p $PKG_PATH/bin
-install -m 755 /pkg/src/cockroach/src/github.com/cockroachdb/cockroach/cockroach-linux-2.6.32-gnu-amd64 $PKG_PATH/bin/cockroach
+install -m 755 /pkg/src/cockroach/src/github.com/cockroachdb/cockroach/cockroach-linux-2.6.32-gnu-arm64 $PKG_PATH/bin/cockroach
 
 # Copy the registration script to the package bin directory.
 install -m 755 /pkg/extra/register.py $PKG_PATH/bin/register.py
