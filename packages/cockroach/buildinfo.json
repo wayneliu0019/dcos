@@ -2,7 +2,7 @@
   "requires": ["ncurses"],
   "single_source" : {
       "kind": "url_extract",
-      "url": "http://172.31.1.162:9990/cockroach2.0.7.src.tgz",
+      "url": "https://wayne-apac.s3-us-west-2.amazonaws.com/arm64/cockroach/cockroach2.0.7.src.tgz",
       "sha1": "4f2ffa32dbf34d217d8dae43a6f898abfb6b7561"
   },
   "username": "dcos_cockroach",
